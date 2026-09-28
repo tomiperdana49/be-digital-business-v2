@@ -23,6 +23,8 @@ export interface SnapshotData {
     // Diisi manual lewat edit /invoice saja (job sync tidak pernah mengisi/mengubah ini).
     // Kalau terisi, dipakai sebagai basis nominal komisi menggantikan subscription.
     base_commission?: number | null;
+    // Diisi manual lewat edit /invoice saja. Kalau terisi, dipakai sebagai MRC menggantikan hasil hitung.
+    mrc_override?: number | null;
 }
 
 export type SnapshotUpdateData = Partial<Omit<SnapshotData, 'ai'>>;

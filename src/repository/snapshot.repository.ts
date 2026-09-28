@@ -221,7 +221,7 @@ export class SnapshotRepository implements ISnapshotRepository {
             'customer_id', 'customer_service_id', 'customer_company', 'contract_until_date',
             'service_group_id', 'service_id', 'service_name', 'service_type',
             'cross_sell_count', 'sales_id', 'manager_sales_id', 'implementator_id', 'modal',
-            'base_commission'
+            'base_commission', 'mrc_override'
         ];
 
         const setClauses: string[] = [];

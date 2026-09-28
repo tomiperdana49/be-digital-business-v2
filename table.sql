@@ -36,7 +36,8 @@ CREATE TABLE snapshots (
     implementator_id VARCHAR(20) NULL,
     modal DECIMAL(15, 6) NULL,
     is_adjust BOOLEAN NOT NULL DEFAULT false,
-    base_commission DECIMAL(15, 2) NULL
+    base_commission DECIMAL(15, 2) NULL,
+    mrc_override DECIMAL(15, 2) NULL
 );
 
 -- Migration untuk database yang sudah ada:
@@ -44,6 +45,7 @@ CREATE TABLE snapshots (
 -- ALTER TABLE snapshots ADD COLUMN is_adjust BOOLEAN NOT NULL DEFAULT false;
 -- ALTER TABLE snapshots MODIFY COLUMN status ENUM('new', 'upgrade', 'termin', 'recurring', 'prorate', 'add', 'setup') NOT NULL DEFAULT 'recurring';
 -- ALTER TABLE snapshots ADD COLUMN base_commission DECIMAL(15, 2) NULL;
+-- ALTER TABLE snapshots ADD COLUMN mrc_override DECIMAL(15, 2) NULL;
 
 -- Mapping manager -> staff per periode (year, month).
 -- employee_id & manager_id merujuk ke employees.id (internal numeric id).

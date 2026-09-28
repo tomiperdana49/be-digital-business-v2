@@ -20,6 +20,15 @@ export class SnapshotService implements ISnapshotService {
             : subscription;
     }
 
+    /**
+     * MRC manual: kalau mrc_override diisi (lewat edit /invoice), pakai itu menggantikan MRC hasil hitung.
+     */
+    private applyMrcOverride(row: any, mrc: number): number {
+        return (row.mrc_override !== null && row.mrc_override !== undefined)
+            ? Number(row.mrc_override)
+            : mrc;
+    }
+
     async getSnapshotList(filters: SnapshotListFilters): Promise<any> {
         const [rows, total, newResellServiceIdRows] = await Promise.all([
             this.snapshotRepository.getSnapshots(filters),
@@ -50,7 +59,7 @@ export class SnapshotService implements ISnapshotService {
                 const res = Calculate.internalSalesCommission(status, this.commissionBase(row, subscription), row.cross_sell_count, monthPeriod);
                 commissionAmount = res.commissionAmount;
                 commissionPercentage = res.commissionPercentage;
-                mrc = ['recurring', 'termin', 'setup'].includes(status) ? 0 : Calculate.mrc(subscription, monthPeriod, status);
+                mrc = this.applyMrcOverride(row, ['recurring', 'termin', 'setup'].includes(status) ? 0 : Calculate.mrc(subscription, monthPeriod, status));
             }
 
             return {
@@ -83,6 +92,7 @@ export class SnapshotService implements ISnapshotService {
                 modal: row.service_type === 'resell' ? Number(row.modal) || 0 : null,
                 crossSellCount: row.service_type === 'internal' ? row.cross_sell_count : null,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
+                mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
                 mrc,
                 commissionPercentage,
                 commission: commissionAmount,
@@ -149,7 +159,8 @@ export class SnapshotService implements ISnapshotService {
                 },
                 subscription,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
-                mrc: ['recurring', 'termin', 'setup'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status),
+                mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
+                mrc: this.applyMrcOverride(row, ['recurring', 'termin', 'setup'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status)),
                 commissionPercentage: implementatorCommissionPercentage,
                 commission: implementatorCommission,
                 isAdjust: Boolean(row.is_adjust)
@@ -247,9 +258,7 @@ export class SnapshotService implements ISnapshotService {
                 subscriptionRecurring += subscription;
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += implementatorCommission;
-                if (status !== 'termin') {
-                    totalMrc += Calculate.mrc(subscription, monthPeriod, status);
-                }
+                totalMrc += this.applyMrcOverride(row, status !== 'termin' ? Calculate.mrc(subscription, monthPeriod, status) : 0);
                 totalSubscription += subscription;
             } else if (status === 'setup') {
                 // Setup: fee satu kali, hanya masuk Total Commission (bukan MRC/Subscription/New Account)
@@ -341,9 +350,7 @@ export class SnapshotService implements ISnapshotService {
                 subscriptionRecurring += subscription;
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
-                if (status !== 'termin') {
-                    totalMrc += Calculate.mrc(subscription, monthPeriod, status);
-                }
+                totalMrc += this.applyMrcOverride(row, status !== 'termin' ? Calculate.mrc(subscription, monthPeriod, status) : 0);
                 totalSubscription += subscription;
             }
 
@@ -413,7 +420,8 @@ export class SnapshotService implements ISnapshotService {
                 },
                 subscription,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
-                mrc: ['recurring', 'termin'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status),
+                mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
+                mrc: this.applyMrcOverride(row, ['recurring', 'termin'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status)),
                 commissionPercentage,
                 commission: commissionAmount,
                 isAdjust: Boolean(row.is_adjust)
@@ -436,6 +444,7 @@ export class SnapshotService implements ISnapshotService {
 
     /**
      * MRC untuk baris resell.
+     * - mrc_override (diisi manual lewat edit /invoice): selalu dipakai kalau terisi
      * - recurring / termin: selalu 0
      * - prorate: 0 jika customer_service_id-nya juga punya invoice 'new' di periode yang sama
      *   (hindari dobel hitung; new-nya sudah membawa MRC).
@@ -446,6 +455,8 @@ export class SnapshotService implements ISnapshotService {
      * - new / prorate / add: MRC normal (subscription / monthPeriod); add < 1 bulan = subscription penuh
      */
     private resellMrc(row: any, newResellServiceIds: Set<any>, startDate: string): number {
+        if (row.mrc_override !== null && row.mrc_override !== undefined) return Number(row.mrc_override);
+
         const status = row.status;
         if (['recurring', 'termin', 'setup'].includes(status)) return 0;
 
@@ -500,6 +511,7 @@ export class SnapshotService implements ISnapshotService {
                 markup,
                 margin,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
+                mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
                 mrc: this.resellMrc(row, newResellServiceIds, startDate),
                 commissionPercentage,
                 commission: commissionAmount,
