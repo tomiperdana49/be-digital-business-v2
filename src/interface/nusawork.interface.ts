@@ -7,6 +7,7 @@ export interface Employee {
     jobPosition: string;
     organizationName: string;
     jobLevel: string;
+    branchId: string | null;
     branch: string;
     managerId: number | string | null;
     hasDashboard?: boolean;

@@ -16,12 +16,13 @@ export class EmployeeRepository implements IEmployeeRepository {
                 job_position,
                 organization_name,
                 job_level,
+                branch_id,
                 branch,
                 manager_id,
                 has_dashboard,
                 is_admin
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 employee_id = VALUES(employee_id),
                 name = VALUES(name),
@@ -30,6 +31,7 @@ export class EmployeeRepository implements IEmployeeRepository {
                 job_position = VALUES(job_position),
                 organization_name = VALUES(organization_name),
                 job_level = VALUES(job_level),
+                branch_id = VALUES(branch_id),
                 branch = VALUES(branch),
                 manager_id = VALUES(manager_id),
                 has_dashboard = VALUES(has_dashboard),
@@ -45,6 +47,7 @@ export class EmployeeRepository implements IEmployeeRepository {
             data.jobPosition,
             data.organizationName,
             data.jobLevel,
+            data.branchId,
             data.branch,
             data.managerId ?? null,
             data.hasDashboard ?? false,

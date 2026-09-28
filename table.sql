@@ -7,6 +7,7 @@ CREATE TABLE employees (
     job_position VARCHAR(255) NOT NULL,
     organization_name VARCHAR(255) NOT NULL,
     job_level VARCHAR(50) NOT NULL,
+    branch_id VARCHAR(20) NULL,
     branch VARCHAR(255) NOT NULL,
     manager_id INT NULL,
     has_dashboard BOOLEAN NOT NULL DEFAULT false,
@@ -42,6 +43,7 @@ CREATE TABLE snapshots (
 
 -- Migration untuk database yang sudah ada:
 -- ALTER TABLE employees ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT false;
+-- ALTER TABLE employees ADD COLUMN branch_id VARCHAR(20) NULL AFTER job_level;
 -- ALTER TABLE snapshots ADD COLUMN is_adjust BOOLEAN NOT NULL DEFAULT false;
 -- ALTER TABLE snapshots MODIFY COLUMN status ENUM('new', 'upgrade', 'termin', 'recurring', 'prorate', 'add', 'setup') NOT NULL DEFAULT 'recurring';
 -- ALTER TABLE snapshots ADD COLUMN base_commission DECIMAL(15, 2) NULL;

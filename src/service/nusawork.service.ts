@@ -73,6 +73,7 @@ export class NusaworkService implements INusaworkService {
             jobPosition: emp.job_position,
             organizationName: emp.organization_name,
             jobLevel: emp.job_level,
+            branchId: emp.branch_id ?? null,
             branch: emp.branch_name,
             managerId: emp.id_report_to_value,
         }));
@@ -98,6 +99,7 @@ export class NusaworkService implements INusaworkService {
             jobPosition: emp.job_position,
             organizationName: emp.organization_name,
             jobLevel: emp.job_level,
+            branchId: emp.branch_id ?? null,
             branch: emp.branch_name,
             managerId: emp.id_report_to_value,
             hasDashboard: emp.job_position !== 'Nusawork Product Manager',
@@ -130,6 +132,7 @@ export class NusaworkService implements INusaworkService {
             jobPosition: emp.job_position,
             organizationName: emp.organization_name,
             jobLevel: emp.job_level,
+            branchId: emp.branch_id ?? null,
             branch: emp.branch_name,
             managerId: null,
             isAdmin: true,
