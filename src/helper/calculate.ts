@@ -17,8 +17,11 @@ export class Calculate {
 
     /**
      * MRC = subscription / monthPeriod
+     * - upgrade / add dengan periode < 1 bulan: MRC = subscription (DPP) penuh, tidak dibagi
+     *   (kalau dibagi, periode pecahan justru membuat MRC lebih besar dari DPP-nya).
      */
-    static mrc(subscription: number, monthPeriod: number): number {
+    static mrc(subscription: number, monthPeriod: number, status?: SnapshotStatus): number {
+        if ((status === 'upgrade' || status === 'add') && monthPeriod < 1) return subscription;
         return subscription / (monthPeriod || 1);
     }
 

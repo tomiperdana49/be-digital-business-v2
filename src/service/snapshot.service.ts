@@ -50,7 +50,7 @@ export class SnapshotService implements ISnapshotService {
                 const res = Calculate.internalSalesCommission(status, this.commissionBase(row, subscription), row.cross_sell_count, monthPeriod);
                 commissionAmount = res.commissionAmount;
                 commissionPercentage = res.commissionPercentage;
-                mrc = ['recurring', 'termin', 'setup'].includes(status) ? 0 : Calculate.mrc(subscription, monthPeriod);
+                mrc = ['recurring', 'termin', 'setup'].includes(status) ? 0 : Calculate.mrc(subscription, monthPeriod, status);
             }
 
             return {
@@ -149,7 +149,7 @@ export class SnapshotService implements ISnapshotService {
                 },
                 subscription,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
-                mrc: ['recurring', 'termin', 'setup'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod),
+                mrc: ['recurring', 'termin', 'setup'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status),
                 commissionPercentage: implementatorCommissionPercentage,
                 commission: implementatorCommission,
                 isAdjust: Boolean(row.is_adjust)
@@ -248,7 +248,7 @@ export class SnapshotService implements ISnapshotService {
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += implementatorCommission;
                 if (status !== 'termin') {
-                    totalMrc += Calculate.mrc(subscription, monthPeriod);
+                    totalMrc += Calculate.mrc(subscription, monthPeriod, status);
                 }
                 totalSubscription += subscription;
             } else if (status === 'setup') {
@@ -342,7 +342,7 @@ export class SnapshotService implements ISnapshotService {
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
                 if (status !== 'termin') {
-                    totalMrc += Calculate.mrc(subscription, monthPeriod);
+                    totalMrc += Calculate.mrc(subscription, monthPeriod, status);
                 }
                 totalSubscription += subscription;
             }
@@ -413,7 +413,7 @@ export class SnapshotService implements ISnapshotService {
                 },
                 subscription,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
-                mrc: ['recurring', 'termin'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod),
+                mrc: ['recurring', 'termin'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status),
                 commissionPercentage,
                 commission: commissionAmount,
                 isAdjust: Boolean(row.is_adjust)
@@ -443,7 +443,7 @@ export class SnapshotService implements ISnapshotService {
      *   prorate di atas (bisa 0 kalau ada 'new' di periode sama). MULAI periode aturan baru,
      *   upgrade SELALU dihitung MRC-nya, tidak pernah di-nol-kan oleh aturan dedup ini lagi.
      * - upgrade (jika tidak di-nol-kan): MRC dibagi bulan bulat (lihat Calculate.resellUpgradeMrc)
-     * - new / prorate: MRC normal (subscription / monthPeriod)
+     * - new / prorate / add: MRC normal (subscription / monthPeriod); add < 1 bulan = subscription penuh
      */
     private resellMrc(row: any, newResellServiceIds: Set<any>, startDate: string): number {
         const status = row.status;
@@ -462,7 +462,7 @@ export class SnapshotService implements ISnapshotService {
         if (status === 'upgrade') {
             return Calculate.resellUpgradeMrc(subscription, monthPeriod);
         }
-        return Calculate.mrc(subscription, monthPeriod);
+        return Calculate.mrc(subscription, monthPeriod, status);
     }
 
     async getResellInvoiceDetail(employeeId: string, startDate: string, endDate: string): Promise<any> {
