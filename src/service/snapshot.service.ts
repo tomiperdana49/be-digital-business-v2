@@ -322,6 +322,14 @@ export class SnapshotService implements ISnapshotService {
         }));
     }
 
+    /**
+     * Total MRC (new/upgrade/prorate/add, sama dengan kartu Total MRC) milik satu sales dalam satu periode.
+     */
+    async getSalesTotalMrc(employeeId: string, startDate: string, endDate: string): Promise<number> {
+        const data = await this.aggregateSalesCommission(employeeId, startDate, endDate);
+        return data.totalMrc;
+    }
+
     private async aggregateSalesCommission(employeeId: string, startDate: string, endDate: string) {
         const [internalSnapshots, resellSnapshots] = await Promise.all([
             this.snapshotRepository.getInternalInvoice(employeeId, startDate, endDate),

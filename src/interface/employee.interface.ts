@@ -30,5 +30,6 @@ export interface IEmployeeService {
     getEmployeeByEmployeeId(employeeId: string): Promise<any | null>;
     getEmployeeById(id: string): Promise<any | null>;
     getEmployeeByEmail(email: string): Promise<any | null>;
+    getAllEmployees(): Promise<any[]>;
     getHierarchy(employeeId: string): Promise<any[]>;
 }

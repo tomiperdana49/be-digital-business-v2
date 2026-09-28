@@ -64,6 +64,7 @@ export interface ISnapshotService {
     getImplementatorCommissionYearlySummary(implementatorId: string, year: number): Promise<any[]>;
     getSalesCommissionSummary(employeeId: string, startDate: string, endDate: string): Promise<any>;
     getSalesCommissionYearlySummary(employeeId: string, year: number): Promise<any[]>;
+    getSalesTotalMrc(employeeId: string, startDate: string, endDate: string): Promise<number>;
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;

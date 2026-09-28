@@ -3,13 +3,28 @@ import { ISnapshotService } from "../interface/snapshot.interface";
 import { IEmployeeService } from "../interface/employee.interface";
 import { ApiResponse } from "../helper/response";
 import { PeriodHelper } from "../helper/period";
+import { RewardService, QuarterReward } from "../service/reward.service";
+import { Calculate } from "../helper/calculate";
 
 export class CommissionController {
     constructor(
         private readonly snapshotService: ISnapshotService,
         private readonly employeeService: IEmployeeService,
+        private readonly rewardService: RewardService,
         private readonly periodHelper: PeriodHelper = new PeriodHelper(),
     ) {}
+
+    private previousPeriod(year: number, month: number): { year: number; month: number } {
+        return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+    }
+
+    /**
+     * Tambahkan reward kuartal ke total komisi (bulan ini & bulan lalu, supaya tren "from last month" tetap benar).
+     */
+    private withReward(total: { value: number; growth: number }, reward: QuarterReward | null, previousReward: QuarterReward | null) {
+        const previousTotal = total.value - total.growth;
+        return Calculate.trend(total.value + (reward?.amount ?? 0), previousTotal + (previousReward?.amount ?? 0));
+    }
 
     async implementatorCommission(c: Context) {
         const { month: monthQuery, year: yearQuery } = c.req.query();
@@ -50,7 +65,19 @@ export class CommissionController {
         }
 
         const period = this.periodHelper.getPeriodFromQuery(monthQuery, yearQuery);
-        const data = await this.snapshotService.getSalesCommissionSummary(employeeId, period.startDate, period.endDate);
+        const [data, employee] = await Promise.all([
+            this.snapshotService.getSalesCommissionSummary(employeeId, period.startDate, period.endDate),
+            this.employeeService.getEmployeeByEmployeeId(employeeId)
+        ]);
+        const previous = this.previousPeriod(period.year, period.month);
+        const [reward, previousReward] = employee
+            ? await Promise.all([
+                this.rewardService.getSalesQuarterReward(employee, period.year, period.month),
+                this.rewardService.getSalesQuarterReward(employee, previous.year, previous.month)
+            ])
+            : [null, null];
+        data.reward = reward;
+        data.commission.total = this.withReward(data.commission.total, reward, previousReward);
         return ApiResponse.success(c, data, "sales commission retrieved successfully");
     }
 
@@ -150,6 +177,13 @@ export class CommissionController {
         const employeeIds = staff.map((s: any) => s.employee_id);
 
         const data = await this.snapshotService.getManagerCommissionSummary(employeeIds, period.startDate, period.endDate, managerId);
+        const previous = this.previousPeriod(period.year, period.month);
+        const [reward, previousReward] = await Promise.all([
+            this.rewardService.getManagerQuarterReward(manager[0], period.year, period.month),
+            this.rewardService.getManagerQuarterReward(manager[0], previous.year, previous.month)
+        ]);
+        data.reward = reward;
+        data.managerCommission = this.withReward(data.managerCommission, reward, previousReward);
         return ApiResponse.success(c, data, "manager commission retrieved successfully");
     }
 

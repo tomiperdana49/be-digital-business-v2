@@ -62,6 +62,10 @@ export class EmployeeService implements IEmployeeService {
         return await this.employeeRepository.getEmployeeByEmail(email);
     }
 
+    async getAllEmployees() {
+        return await this.employeeRepository.getAllEmployees();
+    }
+
     async getHierarchy(employeeId: string) {
         const employee = await this.getEmployeeByEmployeeId(employeeId);
 
