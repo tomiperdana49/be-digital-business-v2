@@ -114,6 +114,7 @@ export class NusaworkService implements INusaworkService {
             emp.employee_id === '0202589' ||
             emp.employee_id === '0201325' ||
             emp.employee_id === '0202314' ||
+            emp.employee_id === '0201507' ||
             emp.organization_name === 'Finance' ||
             emp.organization_name === 'BIS' ||
             emp.job_level === 'VP' ||
