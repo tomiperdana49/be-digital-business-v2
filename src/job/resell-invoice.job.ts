@@ -12,13 +12,8 @@ const snapshotRepository = new SnapshotRepository(dashboardPool);
 const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const periodHelper = new PeriodHelper();
 
-async function syncResellInvoices() {
+async function syncResellInvoices(startDate: string, endDate: string) {
     console.log('[SYNC] Starting resell invoice synchronization from NIS...');
-    
-    // Default to current month period if not provided
-    const currentPeriod = periodHelper.getStartAndEndDateForCurrentMonth();
-    const startDate = process.argv[2] || currentPeriod.startDate;
-    const endDate = process.argv[3] || currentPeriod.endDate;
 
     try {
         console.log(`[SYNC] Deleting existing resell invoices from ${startDate} to ${endDate}...`);
@@ -131,9 +126,20 @@ async function syncResellInvoices() {
 
     } catch (error: any) {
         console.error(`[SYNC FATAL ERROR] Synchronization failed: ${error.message}`);
-    } finally {
-        process.exit(0);
     }
 }
 
-syncResellInvoices();
+async function main() {
+    // Tanpa argumen: periode berjalan, ditambah periode sebelumnya mulai tanggal 26
+    const periods = process.argv[2]
+        ? [{ startDate: process.argv[2], endDate: process.argv[3] || periodHelper.getStartAndEndDateForCurrentMonth().endDate }]
+        : periodHelper.getPeriodsToSync();
+
+    for (const { startDate, endDate } of periods) {
+        await syncResellInvoices(startDate, endDate);
+    }
+
+    process.exit(0);
+}
+
+main();

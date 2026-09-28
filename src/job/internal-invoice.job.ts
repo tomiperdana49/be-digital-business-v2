@@ -11,13 +11,8 @@ const snapshotRepository = new SnapshotRepository(dashboardPool);
 const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const periodHelper = new PeriodHelper();
 
-async function syncInternalInvoices() {
+async function syncInternalInvoices(startDate: string, endDate: string) {
     console.log('[SYNC] Starting internal invoice synchronization from NIS...');
-    
-    // Default to current month period if not provided
-    const currentPeriod = periodHelper.getStartAndEndDateForCurrentMonth();
-    const startDate = process.argv[2] || currentPeriod.startDate;
-    const endDate = process.argv[3] || currentPeriod.endDate;
 
     try {
         console.log(`[SYNC] Deleting existing internal invoices from ${startDate} to ${endDate}...`);
@@ -123,9 +118,20 @@ async function syncInternalInvoices() {
 
     } catch (error: any) {
         console.error(`[SYNC FATAL ERROR] Synchronization failed: ${error.message}`);
-    } finally {
-        process.exit(0);
     }
 }
 
-syncInternalInvoices();
+async function main() {
+    // Tanpa argumen: periode berjalan, ditambah periode sebelumnya mulai tanggal 26
+    const periods = process.argv[2]
+        ? [{ startDate: process.argv[2], endDate: process.argv[3] || periodHelper.getStartAndEndDateForCurrentMonth().endDate }]
+        : periodHelper.getPeriodsToSync();
+
+    for (const { startDate, endDate } of periods) {
+        await syncInternalInvoices(startDate, endDate);
+    }
+
+    process.exit(0);
+}
+
+main();

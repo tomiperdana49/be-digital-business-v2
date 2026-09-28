@@ -150,6 +150,39 @@ export class PeriodHelper {
     }
 
     /**
+     * Get the periods that the invoice sync jobs should crawl.
+     * Always includes the current period. From the 26th until the end of the month
+     * (the first days of a new period), the previous period is included too, so
+     * payments dated the 25th that land in NIS after the last run of that period are still synced.
+     *
+     * @example
+     * // Jika hari ini adalah "2026-09-20" (<= 25)
+     * const periods = helper.getPeriodsToSync();
+     * // Hasil: [{ startDate: '2026-08-26', endDate: '2026-09-25' }]
+     *
+     * @example
+     * // Jika hari ini adalah "2026-09-28" (> 25)
+     * const periods = helper.getPeriodsToSync();
+     * // Hasil: [{ startDate: '2026-08-26', endDate: '2026-09-25' }, { startDate: '2026-09-26', endDate: '2026-10-25' }]
+     *
+     * @param {Date} [date] - The date to evaluate, defaults to today
+     * @returns {{ startDate: string, endDate: string }[]} Periods to sync, oldest first
+     */
+    getPeriodsToSync(date: Date = new Date()): { startDate: string; endDate: string }[] {
+        const { year, month, startDate, endDate } = this.getPeriodByDate(date);
+        const current = { startDate, endDate };
+
+        if (date.getDate() <= 25) {
+            return [current];
+        }
+
+        const previousMonth = month === 1 ? 12 : month - 1;
+        const previousYear = month === 1 ? year - 1 : year;
+
+        return [this.getStartAndEndDateForMonth(previousYear, previousMonth), current];
+    }
+
+    /**
      * Get period details from optional month and year query parameters.
      * If neither is provided, defaults to the period for today's date.
      * 
