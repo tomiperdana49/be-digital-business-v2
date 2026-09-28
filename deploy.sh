@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pull the latest code and restart the API.
+# Pull the latest code, rebuild dist/index.js, and restart the API.
 #
 # Usage:
 #   ./deploy.sh                                  # restarts PM2 app $PM2_NAME (default below)
@@ -82,6 +82,10 @@ if [ "${FORCE:-}" = "1" ] || git diff --name-only "$before" "$after" | grep -qE 
     log "Installing dependencies..."
     "$BUN" install --frozen-lockfile
 fi
+
+# PM2 runs the bundled dist/index.js, not src/, so rebuild before restarting
+log "Building dist/index.js..."
+"$BUN" run build
 
 restart_app
 health_check
