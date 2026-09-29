@@ -3,7 +3,9 @@ import { ITargetRepository } from "../interface/target.interface";
 import { IEmployeeService } from "../interface/employee.interface";
 import { ApiResponse } from "../helper/response";
 import { BadRequestException } from "../helper/exception";
-import { DEFAULT_BRANCH_TARGET_ID, DEFAULT_ORGANIZATION_TARGET, QUARTER_REWARD } from "../service/reward.service";
+import { DEFAULT_BRANCH_TARGET_ID, DEFAULT_EMPLOYEE_TARGET, DEFAULT_ORGANIZATION_TARGET, QUARTER_REWARD } from "../service/reward.service";
+
+const ACCOUNT_MANAGER_POSITION = 'Account Manager';
 
 export class TargetController {
     constructor(
@@ -42,7 +44,13 @@ export class TargetController {
                 .map(([name, branchIds]) => ({ organizationName: name, name, branchIds: Array.from(branchIds).sort() }))
         ];
 
-        return ApiResponse.success(c, { targets, branches, organizations, rules: QUARTER_REWARD }, "Branch targets retrieved successfully");
+        // Target per karyawan hanya untuk Account Manager (target tim SM = jumlah target AM-nya)
+        const targetEmployees = employees
+            .filter(e => e.job_position === ACCOUNT_MANAGER_POSITION)
+            .map(e => ({ employeeId: e.employee_id, name: e.name, branchId: e.branch_id, organizationName: e.organization_name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        return ApiResponse.success(c, { targets, branches, organizations, employees: targetEmployees, rules: QUARTER_REWARD }, "Branch targets retrieved successfully");
     }
 
     async upsert(c: Context) {
@@ -51,8 +59,18 @@ export class TargetController {
         const organizationName = typeof body.organizationName === 'string' && body.organizationName.trim()
             ? body.organizationName.trim()
             : DEFAULT_ORGANIZATION_TARGET;
+        // employeeIds: satu baris target per karyawan; kosong = semua karyawan ('*')
+        const rawEmployeeIds: unknown[] = Array.isArray(body.employeeIds) ? body.employeeIds : [body.employeeId];
+        const selectedEmployeeIds = Array.from(new Set(rawEmployeeIds
+            .filter((id): id is string => typeof id === 'string')
+            .map(id => id.trim())
+            .filter(id => id && id !== DEFAULT_EMPLOYEE_TARGET)));
+        const employeeIds = selectedEmployeeIds.length ? selectedEmployeeIds : [DEFAULT_EMPLOYEE_TARGET];
         const year = Number(body.year);
         const month = Number(body.month);
+        const hasEnd = body.endYear != null && body.endYear !== '' && body.endMonth != null && body.endMonth !== '';
+        const endYear = hasEnd ? Number(body.endYear) : null;
+        const endMonth = hasEnd ? Number(body.endMonth) : null;
         const targetNewMrc = Number(body.targetNewMrc);
 
         if (!branchId || branchId.length > 20) {
@@ -67,12 +85,27 @@ export class TargetController {
         if (!Number.isInteger(month) || month < 1 || month > 12) {
             throw new BadRequestException('Valid month (1-12) is required');
         }
+        if (endYear !== null && endMonth !== null) {
+            if (!Number.isInteger(endYear) || endYear < 2000 || endYear > 2100 || !Number.isInteger(endMonth) || endMonth < 1 || endMonth > 12) {
+                throw new BadRequestException('Valid end period is required');
+            }
+            if (endYear * 100 + endMonth < year * 100 + month) {
+                throw new BadRequestException('End period must not be before the start period');
+            }
+        }
+        for (const employeeId of selectedEmployeeIds) {
+            if (!(await this.employeeService.getEmployeeByEmployeeId(employeeId))) {
+                throw new BadRequestException(`Employee ${employeeId} not found`);
+            }
+        }
         if (!Number.isFinite(targetNewMrc) || targetNewMrc < 0) {
             throw new BadRequestException('targetNewMrc must be a number >= 0');
         }
 
-        await this.targetRepository.upsert({ branchId, organizationName, year, month, targetNewMrc });
-        return ApiResponse.success(c, { branchId, organizationName, year, month, targetNewMrc }, "Branch target saved successfully");
+        for (const employeeId of employeeIds) {
+            await this.targetRepository.upsert({ branchId, organizationName, employeeId, year, month, endYear, endMonth, targetNewMrc });
+        }
+        return ApiResponse.success(c, { branchId, organizationName, employeeIds, year, month, endYear, endMonth, targetNewMrc }, "Branch target saved successfully");
     }
 
     async delete(c: Context) {

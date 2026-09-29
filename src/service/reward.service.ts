@@ -20,8 +20,10 @@ export const QUARTER_REWARD = {
 
 export const DEFAULT_BRANCH_TARGET_ID = '*';
 export const DEFAULT_ORGANIZATION_TARGET = '*';
+export const DEFAULT_EMPLOYEE_TARGET = '*';
 
 export interface TargetEmployee {
+    employee_id: string;
     branch_id: string | null;
     organization_name: string | null;
 }
@@ -66,25 +68,32 @@ export class RewardService {
     }
 
     /**
-     * Target bulanan karyawan pada (year, month): baris terbaru yang berlaku <= periode itu,
-     * dicari dari yang paling spesifik: branch + organisasi, branch saja ('*' organisasi),
-     * organisasi saja ('*' branch), lalu default ('*', '*'). Kalau tidak ada sama sekali, 0.
+     * Target bulanan karyawan pada (year, month): baris terbaru yang sedang berlaku di periode itu
+     * (mulai <= periode, dan akhir >= periode kalau akhirnya diisi), dicari dari yang paling spesifik:
+     * karyawan, branch + organisasi, branch saja ('*' organisasi), organisasi saja ('*' branch),
+     * lalu default ('*', '*'). Kalau tidak ada sama sekali, 0.
      */
     resolveMonthlyTarget(targets: BranchTarget[], employee: TargetEmployee, year: number, month: number): number {
         const period = year * 100 + month;
-        const latest = (branchId: string, organizationName: string) => targets
-            .filter(t => t.branch_id === branchId && t.organization_name === organizationName && t.year * 100 + t.month <= period)
+        const isActive = (t: BranchTarget) => t.year * 100 + t.month <= period
+            && (t.end_year === null || t.end_month === null || t.end_year * 100 + t.end_month >= period);
+        const latestOf = (rows: BranchTarget[]) => rows
+            .filter(isActive)
             .sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month))[0];
+        const latest = (branchId: string, organizationName: string) => latestOf(targets.filter(t =>
+            t.employee_id === DEFAULT_EMPLOYEE_TARGET && t.branch_id === branchId && t.organization_name === organizationName
+        ));
 
-        const { branch_id: branchId, organization_name: organizationName } = employee;
-        const target = (branchId && organizationName ? latest(branchId, organizationName) : undefined)
+        const { employee_id: employeeId, branch_id: branchId, organization_name: organizationName } = employee;
+        const target = latestOf(targets.filter(t => t.employee_id === employeeId))
+            ?? (branchId && organizationName ? latest(branchId, organizationName) : undefined)
             ?? (branchId ? latest(branchId, DEFAULT_ORGANIZATION_TARGET) : undefined)
             ?? (organizationName ? latest(DEFAULT_BRANCH_TARGET_ID, organizationName) : undefined)
             ?? latest(DEFAULT_BRANCH_TARGET_ID, DEFAULT_ORGANIZATION_TARGET);
         return target ? target.target_new_mrc : 0;
     }
 
-    async getSalesQuarterReward(employee: TargetEmployee & { id: string; employee_id: string }, year: number, month: number): Promise<QuarterReward | null> {
+    async getSalesQuarterReward(employee: TargetEmployee & { id: string }, year: number, month: number): Promise<QuarterReward | null> {
         if (!this.isRewardPeriod(year, month)) return null;
         if (await this.isManager(employee.id, year, month)) return null;
 
