@@ -5,7 +5,7 @@ import { PeriodHelper } from '../helper/period';
 
 /**
  * Reward kuartal berdasarkan pencapaian New MRC terhadap target.
- * - AM: akumulasi New MRC sendiri 1 kuartal >= 125% dari target kuartal (target bulanan branch x 3).
+ * - AM: akumulasi New MRC sendiri 1 kuartal >= 125% dari target kuartal (target bulanan branch + organisasi x 3).
  * - SM: akumulasi New MRC seluruh AM di timnya >= 125% dari jumlah target kuartal AM tsb.
  *   Karyawan yang menjadi manager_id karyawan lain dianggap SM: tidak dapat reward AM.
  *   Reward SM hanya untuk jabatan Sales Manager (VP / Product Manager tidak dapat).
@@ -19,6 +19,12 @@ export const QUARTER_REWARD = {
 };
 
 export const DEFAULT_BRANCH_TARGET_ID = '*';
+export const DEFAULT_ORGANIZATION_TARGET = '*';
+
+export interface TargetEmployee {
+    branch_id: string | null;
+    organization_name: string | null;
+}
 
 /**
  * Reward kuartal mulai berlaku Q3 2026 (periode Juli 2026). Kuartal sebelumnya tidak punya reward.
@@ -60,27 +66,32 @@ export class RewardService {
     }
 
     /**
-     * Target bulanan untuk branch pada (year, month): baris terbaru milik branch tsb yang
-     * berlaku <= periode itu, kalau tidak ada pakai baris default ('*'), kalau tidak ada juga 0.
+     * Target bulanan karyawan pada (year, month): baris terbaru yang berlaku <= periode itu,
+     * dicari dari yang paling spesifik: branch + organisasi, branch saja ('*' organisasi),
+     * organisasi saja ('*' branch), lalu default ('*', '*'). Kalau tidak ada sama sekali, 0.
      */
-    resolveMonthlyTarget(targets: BranchTarget[], branchId: string | null, year: number, month: number): number {
+    resolveMonthlyTarget(targets: BranchTarget[], employee: TargetEmployee, year: number, month: number): number {
         const period = year * 100 + month;
-        const latest = (id: string) => targets
-            .filter(t => t.branch_id === id && t.year * 100 + t.month <= period)
+        const latest = (branchId: string, organizationName: string) => targets
+            .filter(t => t.branch_id === branchId && t.organization_name === organizationName && t.year * 100 + t.month <= period)
             .sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month))[0];
 
-        const target = (branchId ? latest(branchId) : undefined) ?? latest(DEFAULT_BRANCH_TARGET_ID);
+        const { branch_id: branchId, organization_name: organizationName } = employee;
+        const target = (branchId && organizationName ? latest(branchId, organizationName) : undefined)
+            ?? (branchId ? latest(branchId, DEFAULT_ORGANIZATION_TARGET) : undefined)
+            ?? (organizationName ? latest(DEFAULT_BRANCH_TARGET_ID, organizationName) : undefined)
+            ?? latest(DEFAULT_BRANCH_TARGET_ID, DEFAULT_ORGANIZATION_TARGET);
         return target ? target.target_new_mrc : 0;
     }
 
-    async getSalesQuarterReward(employee: { id: string; employee_id: string; branch_id: string | null }, year: number, month: number): Promise<QuarterReward | null> {
+    async getSalesQuarterReward(employee: TargetEmployee & { id: string; employee_id: string }, year: number, month: number): Promise<QuarterReward | null> {
         if (!this.isRewardPeriod(year, month)) return null;
         if (await this.isManager(employee.id, year, month)) return null;
 
         const targets = await this.targetRepository.getAll();
         const months = this.getQuarterMonths(month);
 
-        const target = months.reduce((sum, m) => sum + this.resolveMonthlyTarget(targets, employee.branch_id, year, m), 0);
+        const target = months.reduce((sum, m) => sum + this.resolveMonthlyTarget(targets, employee, year, m), 0);
         const achievements = await Promise.all(
             months.filter(m => m <= month).map(m => {
                 const { startDate, endDate } = this.periodHelper.getStartAndEndDateForMonth(year, m);
@@ -105,7 +116,7 @@ export class RewardService {
         for (const m of months) {
             // Bulan setelah bulan yang dipilih belum tentu sudah di-mapping, pakai tim bulan yang dipilih
             const staff = m <= month ? await this.employeeService.getStaffForPeriod(managerInternalId, year, m) : selectedStaff;
-            target += staff.reduce((sum: number, s: any) => sum + this.resolveMonthlyTarget(targets, s.branch_id, year, m), 0);
+            target += staff.reduce((sum: number, s: any) => sum + this.resolveMonthlyTarget(targets, s, year, m), 0);
 
             if (m <= month) {
                 const { startDate, endDate } = this.periodHelper.getStartAndEndDateForMonth(year, m);

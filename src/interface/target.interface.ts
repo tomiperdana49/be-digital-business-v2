@@ -1,6 +1,7 @@
 export interface BranchTarget {
     id: number;
     branch_id: string;
+    organization_name: string;
     year: number;
     month: number;
     target_new_mrc: number;
@@ -8,6 +9,7 @@ export interface BranchTarget {
 
 export interface BranchTargetInput {
     branchId: string;
+    organizationName: string;
     year: number;
     month: number;
     targetNewMrc: number;

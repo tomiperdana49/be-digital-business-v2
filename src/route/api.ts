@@ -77,7 +77,7 @@ api.get('/commission/:id/manager/yearly', (c) => commissionController.managerCom
 api.get('/team/:id/manager', (c) => commissionController.managerTeam(c));
 api.get('/team/:id/manager/yearly', (c) => commissionController.managerTeamYearly(c));
 
-// Admin Target Routes (target New MRC per branch untuk reward kuartal)
+// Admin Target Routes (target New MRC per branch & organisasi untuk reward kuartal)
 api.get('/target', authMiddleware, adminMiddleware, (c) => targetController.list(c));
 api.put('/target', authMiddleware, adminMiddleware, (c) => targetController.upsert(c));
 api.delete('/target/:id', authMiddleware, adminMiddleware, (c) => targetController.delete(c));

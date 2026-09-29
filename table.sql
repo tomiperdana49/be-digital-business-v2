@@ -61,17 +61,26 @@ CREATE TABLE employee_manager_snapshots (
     month INT NOT NULL,
     UNIQUE KEY uq_employee_manager_period (employee_id, year, month)
 );
--- Target New MRC per AM per bulan, per branch (employees.branch_id), untuk reward kuartal.
--- Satu baris berlaku mulai (year, month) sampai ada baris lebih baru untuk branch yang sama.
--- branch_id '*' = default untuk branch yang tidak punya target sendiri.
+-- Target New MRC per AM per bulan, per branch (employees.branch_id) dan organisasi
+-- (employees.organization_name), untuk reward kuartal.
+-- Satu baris berlaku mulai (year, month) sampai ada baris lebih baru untuk branch + organisasi yang sama.
+-- branch_id '*' = semua branch, organization_name '*' = semua organisasi.
+-- Urutan pencarian: branch + organisasi, branch saja, organisasi saja, lalu default ('*', '*').
 CREATE TABLE branch_targets (
     id INT PRIMARY KEY AUTO_INCREMENT,
     branch_id VARCHAR(20) NOT NULL,
+    organization_name VARCHAR(255) NOT NULL DEFAULT '*',
     year INT NOT NULL,
     month INT NOT NULL,
     target_new_mrc DECIMAL(15, 2) NOT NULL,
-    UNIQUE KEY uq_branch_target_period (branch_id, year, month)
+    UNIQUE KEY uq_branch_target_period (branch_id, organization_name, year, month)
 );
+
+-- Migrasi untuk tabel branch_targets yang sudah ada (sebelum ada kolom organization_name):
+-- ALTER TABLE branch_targets
+--     ADD COLUMN organization_name VARCHAR(255) NOT NULL DEFAULT '*' AFTER branch_id,
+--     DROP INDEX uq_branch_target_period,
+--     ADD UNIQUE KEY uq_branch_target_period (branch_id, organization_name, year, month);
 
 -- Target awal (reward mulai Q3 2026): Jakarta (003) Rp 3.000.000, branch lain Rp 2.424.000 per AM per bulan.
 INSERT INTO branch_targets (branch_id, year, month, target_new_mrc) VALUES
