@@ -650,8 +650,9 @@ export class SnapshotService implements ISnapshotService {
         const currentTotal = current.commissionNew + current.commissionRecurring;
         const previousTotal = previous.commissionNew + previous.commissionRecurring;
 
-        // "Cust Lama" = komisi & subscription pribadi manager sebagai sales (sales_id = manager).
-        // Dihitung PENUH (bukan dipotong 25%), lalu DITAMBAHKAN ke angka tim untuk jadi headline
+        // "Cust Lama" = komisi & subscription invoice RECURRING pribadi manager sebagai sales (sales_id = manager),
+        // sama dengan tabel "Manager's own recurring invoices". Invoice new/upgrade/prorate/add milik manager
+        // tidak dihitung. Dihitung PENUH (bukan dipotong 25%), lalu DITAMBAHKAN ke angka tim untuk jadi headline
         // "Manager Commission" & "Total Subscription" (total: tim + pribadi manager).
         let managerCurrentCommission = 0;
         let managerPreviousCommission = 0;
@@ -666,12 +667,12 @@ export class SnapshotService implements ISnapshotService {
                 this.aggregateSalesCommission(managerId, prevStartDate, prevEndDate)
             ]);
 
-            managerCurrentCommission = managerCurrent.commissionNew + managerCurrent.commissionRecurring;
-            managerPreviousCommission = managerPrevious.commissionNew + managerPrevious.commissionRecurring;
+            managerCurrentCommission = managerCurrent.commissionRecurring;
+            managerPreviousCommission = managerPrevious.commissionRecurring;
             custLamaCommission = Calculate.trend(managerCurrentCommission, managerPreviousCommission);
 
-            managerCurrentSubscription = managerCurrent.totalSubscription + managerCurrent.subscriptionRecurring;
-            managerPreviousSubscription = managerPrevious.totalSubscription + managerPrevious.subscriptionRecurring;
+            managerCurrentSubscription = managerCurrent.subscriptionRecurring;
+            managerPreviousSubscription = managerPrevious.subscriptionRecurring;
             custLamaSubscription = Calculate.trend(managerCurrentSubscription, managerPreviousSubscription);
         }
 
