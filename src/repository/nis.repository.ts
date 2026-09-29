@@ -1,6 +1,37 @@
 import { Pool } from 'mysql2/promise';
 import { INisRepository } from '../interface/nis.interface';
 
+/**
+ * Tanggal pelunasan dari batch pembayaran NIS, per AI (item invoice).
+ * Item yang dilunasi manual (mis. pakai saldo PPh 23, bukan lewat alur pembayaran sistem) tidak punya trx_date,
+ * tapi tercatat di NewCustomerInvoiceBatch. Tanggalnya diambil dari log kapan item terakhir
+ * dimasukkan ke batch-nya yang sekarang. Untuk pembayaran lewat sistem, tanggal ini sama dengan trx_date.
+ * Batch hanya dihitung lunas kalau berisi penerimaan uang (RA02) atau PPh 23; alokasi SSP PPN,
+ * write-off piutang (note) dan diskon tidak dianggap pembayaran.
+ */
+const BATCH_PAID_DATE_JOIN = `
+            LEFT JOIN (
+                SELECT ncib.AI, DATE(MAX(l.action_at)) AS batch_date
+                FROM NewCustomerInvoiceBatch ncib
+                JOIN NewCustomerInvoiceBatchLogItem li
+                    ON li.AI = ncib.AI AND li.batch_no = ncib.batchNo
+                JOIN NewCustomerInvoiceBatchLog l
+                    ON l.id = li.log_id AND l.action = 'add'
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM NewCustomerInvoiceBatch src_b
+                    JOIN NewCustomerInvoice src ON src.AI = src_b.AI
+                    WHERE src_b.batchNo = ncib.batchNo
+                        AND src_b.total > 0
+                        AND src.Type IN ('RA02', 'pph23')
+                )
+                GROUP BY ncib.AI
+            ) AS batch_paid
+                ON batch_paid.AI = nciit.AI`;
+
+// Periode pakai trx_date; kalau kosong, pakai tanggal pelunasan dari batch
+const PAID_DATE_IN_RANGE = `(nciit.trx_date BETWEEN ? AND ? OR (nciit.trx_date IS NULL AND batch_paid.batch_date BETWEEN ? AND ?))`;
+
 export class NisRepository implements INisRepository {
     constructor(private readonly dbPool: Pool) {}
 
@@ -11,7 +42,7 @@ export class NisRepository implements INisRepository {
                 nciit.counter AS counter,
                 cit.InvoiceNum AS invoice_number,
                 cit.Urut AS sequence_number,
-                nciit.trx_date AS paid_date,
+                COALESCE(nciit.trx_date, batch_paid.batch_date) AS paid_date,
                 nci.Description AS description,
                 nciit.new_subscription AS new_subscription,
                 nciit.dpp AS subscription,
@@ -58,6 +89,7 @@ export class NisRepository implements INisRepository {
                 ON c.CustId = nci.CustId
             LEFT JOIN Services s 
                 ON cs.ServiceId = s.ServiceId
+            ${BATCH_PAID_DATE_JOIN}
             LEFT JOIN (
                 SELECT 
                     cs2.CustId, 
@@ -73,14 +105,14 @@ export class NisRepository implements INisRepository {
                 AND s.ServiceCategory = 'digital_business'
                 AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
                 AND LOWER(s.ServiceType) NOT LIKE '%license%'
-                AND nciit.trx_date BETWEEN ? AND ?            
+                AND ${PAID_DATE_IN_RANGE}
                 AND NOT (s.ServiceGroup = 'SV' AND nciit.dpp < 500000)
             GROUP BY nciit.AI;
         `;
 
         const [rows] = await this.dbPool.query({
             sql: query,
-        }, [startDate, endDate]);
+        }, [startDate, endDate, startDate, endDate]);
 
         return rows as any[];
     }
@@ -92,7 +124,7 @@ export class NisRepository implements INisRepository {
                 nciit.counter AS counter,
                 cit.InvoiceNum AS invoice_number,
                 cit.Urut AS sequence_number,
-                nciit.trx_date AS paid_date,
+                COALESCE(nciit.trx_date, batch_paid.batch_date) AS paid_date,
                 nciit.new_subscription AS new_subscription,
                 nciit.dpp AS subscription,
                 csc.modal_cost_per_user AS modal,
@@ -140,19 +172,20 @@ export class NisRepository implements INisRepository {
                 ON c.CustId = nci.CustId
             LEFT JOIN Services s 
                 ON cs.ServiceId = s.ServiceId
+            ${BATCH_PAID_DATE_JOIN}
             WHERE s.BusinessOperation = 'resell'
             AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
             AND s.ServiceCategory = 'digital_business'
             AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'   
             AND LOWER(s.ServiceType) NOT LIKE '%license%'  
-            AND nciit.trx_date BETWEEN ? AND ?      
+            AND ${PAID_DATE_IN_RANGE}
             AND NOT (s.ServiceGroup = 'SV' AND nciit.dpp < 500000)      
             GROUP BY nciit.AI;
         `;
 
         const [rows] = await this.dbPool.query({
             sql: query,
-        }, [startDate, endDate]);
+        }, [startDate, endDate, startDate, endDate]);
 
         return rows as any[];
     }
