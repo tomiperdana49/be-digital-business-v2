@@ -14,7 +14,8 @@ async function snapshotManagerMapping() {
 
     try {
         console.log(`[SYNC] Snapshotting current manager mapping for period ${year}-${month}...`);
-        const employees = await employeeRepository.getAllEmployees();
+        // Karyawan nonaktif tidak di-mapping ke periode baru; mapping periode lama tetap utuh
+        const employees = await employeeRepository.getActiveEmployees();
         const staff = employees.filter(emp => emp.manager_id != null);
 
         console.log(`[SYNC] Found ${staff.length} employees with a manager assigned.`);

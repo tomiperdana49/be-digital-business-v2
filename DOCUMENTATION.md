@@ -227,7 +227,9 @@ Job dijalankan via CLI (`bun run sync:*`), bukan scheduler bawaan — asumsi ada
 ### 7.1 `employee.job.ts` — `bun run sync:employee`
 - Fetch 3 kategori dari Nusawork: **Sales Digital** (`Sales Nusawork` / `Sales GWS` org), **Implementator** (`Nusawork Product Manager` / `Implementator Nusawork`), **Admin** (NIK spesifik hardcode + org `Finance`/`BIS` + level `VP`/`Direksi`).
 - Gabungkan & dedup berdasarkan `employeeId` (Map, entry terakhir menang jika duplikat lintas kategori — urutan: sales → admin → implementator).
-- Upsert satu per satu ke `employees` (bukan bulk insert) — error per-row tidak menghentikan proses, hanya di-log.
+- Upsert satu per satu ke `employees` (bukan bulk insert) — error per-row tidak menghentikan proses, hanya di-log. Upsert juga mengosongkan `deactivated_at` (karyawan yang aktif lagi otomatis pulih).
+- Setelah upsert, karyawan resign diambil dari Nusawork (`active_status: inactive`) dan `deactivated_at` diisi dengan `resign_date`-nya. Karyawan lain yang **tidak ada** di hasil sync (mis. pindah unit) diberi `deactivated_at = NOW()`. Baris tidak dihapus supaya snapshot komisi lama tetap ter-JOIN.
+- Karyawan nonaktif tidak bisa login/refresh token, tidak muncul di pilihan target, dan tidak di-mapping oleh `manager-mapping.job.ts` untuk periode baru. Di "My Team" (`GET /employee/:id/hierarchy?month=&year=`) karyawan hanya tampil kalau `deactivated_at` >= awal periode yang dipilih (cut-off 26–25), dengan badge **Nonaktif**. Otorisasi halaman komisi (`hierarchy.middleware.ts`) tidak memakai filter periode, jadi komisi lama karyawan resign tetap bisa dibuka.
 - **Catatan hardcoded**: NIK admin `0202589`, `0201325`, `0202314` ditulis literal di [`nusawork.service.ts`](src/service/nusawork.service.ts) — perlu diubah manual di kode jika ada pergantian personel.
 
 ### 7.2 `internal-invoice.job.ts` — `bun run sync:internal-invoice [startDate] [endDate]`

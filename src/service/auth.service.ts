@@ -9,6 +9,15 @@ import { IAuthService } from "../interface/auth.interface";
 export class AuthService implements IAuthService {
     constructor(private readonly employeeService: IEmployeeService) {}
 
+    /**
+     * Karyawan yang sudah resign / nonaktif tidak boleh login maupun refresh token.
+     */
+    private assertActive(employee: any) {
+        if (employee.deactivated_at && new Date(employee.deactivated_at) <= new Date()) {
+            throw new UnauthorizedException('Employee is no longer active');
+        }
+    }
+
     private getOauth2Client() {
         return new OAuth2Client(
             config.auth.googleClientId,
@@ -78,6 +87,7 @@ export class AuthService implements IAuthService {
         if(!employee) {
             throw new NotFoundException('Employee not found');
         }
+        this.assertActive(employee);
 
         const tokens = await this.generateToken(employee);
         
@@ -94,6 +104,7 @@ export class AuthService implements IAuthService {
         if(!employee) {
             throw new NotFoundException('Employee not found');
         }
+        this.assertActive(employee);
 
         const tokens = await this.generateToken(employee);
         
@@ -111,6 +122,7 @@ export class AuthService implements IAuthService {
         if(!employee) {
             throw new NotFoundException('Employee not found');
         }
+        this.assertActive(employee);
 
         const tokens = await this.generateToken(employee);
         
@@ -135,6 +147,7 @@ export class AuthService implements IAuthService {
         if (!employee) {
             throw new UnauthorizedException('User not found');
         }
+        this.assertActive(employee);
 
         const tokens = await this.generateToken(employee);
 
@@ -159,6 +172,7 @@ export class AuthService implements IAuthService {
         if (!employee) {
             throw new NotFoundException('User not found');
         }
+        this.assertActive(employee);
 
         return this.formatUser(employee);
     }

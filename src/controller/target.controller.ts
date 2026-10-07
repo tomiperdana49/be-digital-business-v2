@@ -16,7 +16,7 @@ export class TargetController {
     async list(c: Context) {
         const [targets, employees] = await Promise.all([
             this.targetRepository.getAll(),
-            this.employeeService.getAllEmployees()
+            this.employeeService.getActiveEmployees()
         ]);
 
         // Daftar branch & organisasi yang dipakai karyawan, untuk pilihan di form target

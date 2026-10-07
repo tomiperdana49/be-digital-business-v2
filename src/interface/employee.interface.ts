@@ -9,6 +9,8 @@ export interface ManagerMappingInput {
 
 export interface IEmployeeRepository {
     insertEmployee(data: Employee): Promise<any>;
+    deactivateEmployeesNotIn(activeIds: Array<number | string>): Promise<number>;
+    setDeactivatedAt(id: number | string, date: string): Promise<number>;
     getManagerById(employeeId: string): Promise<any[]>;
     getStaff(managerId: string): Promise<any[]>;
     getStaffForPeriod(managerId: string, year: number, month: number): Promise<any[]>;
@@ -16,9 +18,10 @@ export interface IEmployeeRepository {
     getEmployeeByEmployeeId(employeeId: string): Promise<any | null>;
     getEmployeeById(id: string): Promise<any | null>;
     getEmployeeByEmail(email: string): Promise<any | null>;
-    getAllDashboardEmployees(): Promise<any[]>;
+    getAllDashboardEmployees(activeFrom?: string): Promise<any[]>;
     getAllEmployees(): Promise<any[]>;
-    getHierarchy(employeeId: string): Promise<any[]>;
+    getActiveEmployees(): Promise<any[]>;
+    getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]>;
 }
 
 export interface IEmployeeService {
@@ -31,5 +34,6 @@ export interface IEmployeeService {
     getEmployeeById(id: string): Promise<any | null>;
     getEmployeeByEmail(email: string): Promise<any | null>;
     getAllEmployees(): Promise<any[]>;
-    getHierarchy(employeeId: string): Promise<any[]>;
+    getActiveEmployees(): Promise<any[]>;
+    getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]>;
 }

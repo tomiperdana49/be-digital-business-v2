@@ -15,8 +15,14 @@ export interface Employee {
 }
 
 export interface INusaworkService {
-    getEmployees(): Promise<any[]>;
+    getEmployees(activeStatus?: 'active' | 'inactive'): Promise<any[]>;
     getSalesDigital(): Promise<Employee[]>;
     getImplementator(): Promise<Employee[]>;
     getEmployeeAdmin(): Promise<Employee[]>;
+    getResignedEmployees(): Promise<ResignedEmployee[]>;
+}
+
+export interface ResignedEmployee {
+    userId: number | string;
+    resignDate: string;
 }

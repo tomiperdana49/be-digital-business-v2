@@ -66,13 +66,21 @@ export class EmployeeService implements IEmployeeService {
         return await this.employeeRepository.getAllEmployees();
     }
 
-    async getHierarchy(employeeId: string) {
+    async getActiveEmployees() {
+        return await this.employeeRepository.getActiveEmployees();
+    }
+
+    /**
+     * activeFrom: awal periode (YYYY-MM-DD). Karyawan yang resign sebelum tanggal ini disembunyikan.
+     * Tanpa activeFrom semua karyawan ikut (dipakai untuk otorisasi akses halaman komisi).
+     */
+    async getHierarchy(employeeId: string, activeFrom?: string) {
         const employee = await this.getEmployeeByEmployeeId(employeeId);
 
         if (employee && employee.manager_id == null) {
-            return await this.employeeRepository.getAllDashboardEmployees();
+            return await this.employeeRepository.getAllDashboardEmployees(activeFrom);
         }
 
-        return await this.employeeRepository.getHierarchy(employeeId);
+        return await this.employeeRepository.getHierarchy(employeeId, activeFrom);
     }
 }

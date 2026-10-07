@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/app';
-import { Employee, INusaworkService } from '../interface/nusawork.interface';
+import { Employee, INusaworkService, ResignedEmployee } from '../interface/nusawork.interface';
 
 export class NusaworkService implements INusaworkService {
     private readonly http: AxiosInstance;
@@ -34,11 +34,11 @@ export class NusaworkService implements INusaworkService {
     /**
      * Ambil list karyawan aktif dari Nusawork.
      */
-    async getEmployees(): Promise<any[]> {
+    async getEmployees(activeStatus: 'active' | 'inactive' = 'active'): Promise<any[]> {
         const token = await this.getToken();
 
         const res = await this.http.post('/emp/api/v4.2/client/employee/filter', {
-            fields: { active_status: ['active'] },
+            fields: { active_status: [activeStatus] },
             is_paginate: false,
             multi_value: false,
             currentPage: 1,
@@ -104,6 +104,20 @@ export class NusaworkService implements INusaworkService {
             managerId: emp.id_report_to_value,
             hasDashboard: emp.job_position !== 'Nusawork Product Manager',
         }));
+    }
+
+    /**
+     * Ambil karyawan yang sudah resign beserta tanggal resign-nya dari Nusawork.
+     */
+    async getResignedEmployees(): Promise<ResignedEmployee[]> {
+        const employees = await this.getEmployees('inactive');
+
+        return employees
+            .filter((emp: any) => emp.resign_date)
+            .map((emp: any) => ({
+                userId: emp.user_id,
+                resignDate: emp.resign_date,
+            }));
     }
 
     /**

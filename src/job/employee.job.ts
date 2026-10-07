@@ -61,6 +61,18 @@ async function syncEmployees() {
             }
         }
 
+        // Karyawan resign: pakai tanggal resign dari Nusawork supaya filter periode akurat
+        const resignedEmployees = await nusaworkService.getResignedEmployees();
+        let resignedCount = 0;
+        for (const emp of resignedEmployees) {
+            resignedCount += await employeeRepository.setDeactivatedAt(emp.userId, emp.resignDate);
+        }
+        console.log(`[SYNC] Set resign date for ${resignedCount} employees.`);
+
+        // Sisanya yang tidak lagi ada di daftar aktif Nusawork (mis. pindah unit) ditandai nonaktif per hari ini
+        const deactivatedCount = await employeeRepository.deactivateEmployeesNotIn(uniqueEmployees.map(emp => emp.userId));
+        console.log(`[SYNC] Deactivated ${deactivatedCount} employees no longer active in Nusawork.`);
+
         console.log(`[SYNC] Completed! Success: ${successCount}, Errors: ${errorCount}`);
 
     } catch (error: any) {

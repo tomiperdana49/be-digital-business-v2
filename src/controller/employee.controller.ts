@@ -2,9 +2,13 @@ import { Context } from "hono";
 import { IEmployeeService } from "../interface/employee.interface";
 import { ApiResponse } from "../helper/response";
 import { NotFoundException, BadRequestException } from "../helper/exception";
+import { PeriodHelper } from "../helper/period";
 
 export class EmployeeController {
-    constructor(private readonly employeeService: IEmployeeService) {}
+    constructor(
+        private readonly employeeService: IEmployeeService,
+        private readonly periodHelper: PeriodHelper = new PeriodHelper()
+    ) {}
 
     async getEmployeeByEmployeeId(c: Context) {
         const employeeId = c.req.param('id');
@@ -27,7 +31,10 @@ export class EmployeeController {
             throw new BadRequestException('Employee ID is required');
         }
 
-        const hierarchy = await this.employeeService.getHierarchy(employeeId);
+        // Hanya tampilkan karyawan yang masih aktif di periode yang dipilih (default: periode berjalan)
+        const { month, year } = c.req.query();
+        const { startDate } = this.periodHelper.getPeriodFromQuery(month, year);
+        const hierarchy = await this.employeeService.getHierarchy(employeeId, startDate);
 
         return ApiResponse.success(c, hierarchy, "Employee hierarchy retrieved successfully");
     }

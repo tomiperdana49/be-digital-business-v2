@@ -35,7 +35,8 @@ export class EmployeeRepository implements IEmployeeRepository {
                 branch = VALUES(branch),
                 manager_id = VALUES(manager_id),
                 has_dashboard = VALUES(has_dashboard),
-                is_admin = VALUES(is_admin)
+                is_admin = VALUES(is_admin),
+                deactivated_at = NULL
         `;
 
         const [rows] = await this.dbPool.query(query, [
@@ -55,6 +56,28 @@ export class EmployeeRepository implements IEmployeeRepository {
         ]);
 
         return rows;
+    }
+
+    /**
+     * Tandai nonaktif karyawan yang tidak ada di daftar aktif hasil sync (resign / pindah unit).
+     * Baris tidak dihapus supaya snapshot komisi lama tetap punya data karyawannya.
+     */
+    async deactivateEmployeesNotIn(activeIds: Array<number | string>): Promise<number> {
+        if (activeIds.length === 0) return 0;
+
+        const query = `
+            UPDATE employees
+            SET deactivated_at = NOW()
+            WHERE deactivated_at IS NULL AND id NOT IN (?)
+        `;
+        const [result]: any = await this.dbPool.query(query, [activeIds]);
+        return result.affectedRows ?? 0;
+    }
+
+    async setDeactivatedAt(id: number | string, date: string): Promise<number> {
+        const query = `UPDATE employees SET deactivated_at = ? WHERE id = ?`;
+        const [result]: any = await this.dbPool.query(query, [date, id]);
+        return result.affectedRows ?? 0;
     }
 
     async getManagerById(employeeId: string): Promise<any[]> {
@@ -129,9 +152,17 @@ export class EmployeeRepository implements IEmployeeRepository {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    async getAllDashboardEmployees(): Promise<any[]> {
-        const query = `SELECT * FROM employees WHERE has_dashboard = true`;
-        const [rows]: any[] = await this.dbPool.query(query);
+    /**
+     * activeFrom (YYYY-MM-DD): kalau diisi, karyawan yang nonaktif sebelum tanggal ini tidak ikut.
+     */
+    async getAllDashboardEmployees(activeFrom?: string): Promise<any[]> {
+        const query = `
+            SELECT * FROM employees
+            WHERE has_dashboard = true
+              AND (? IS NULL OR deactivated_at IS NULL OR deactivated_at >= ?)
+            ORDER BY deactivated_at IS NOT NULL, name
+        `;
+        const [rows]: any[] = await this.dbPool.query(query, [activeFrom ?? null, activeFrom ?? null]);
         return Array.isArray(rows) ? rows : [];
     }
 
@@ -141,7 +172,13 @@ export class EmployeeRepository implements IEmployeeRepository {
         return Array.isArray(rows) ? rows : [];
     }
 
-    async getHierarchy(employeeId: string): Promise<any[]> {
+    async getActiveEmployees(): Promise<any[]> {
+        const query = `SELECT * FROM employees WHERE deactivated_at IS NULL`;
+        const [rows]: any[] = await this.dbPool.query(query);
+        return Array.isArray(rows) ? rows : [];
+    }
+
+    async getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]> {
         const query = `
             WITH RECURSIVE employee_hierarchy AS (
                 SELECT *, 0 AS depth
@@ -157,9 +194,10 @@ export class EmployeeRepository implements IEmployeeRepository {
             SELECT * 
             FROM employee_hierarchy 
             WHERE has_dashboard = true 
-            ORDER BY depth ASC;
+              AND (? IS NULL OR deactivated_at IS NULL OR deactivated_at >= ?)
+            ORDER BY deactivated_at IS NOT NULL, depth ASC;
         `;
-        const [rows]: any[] = await this.dbPool.query(query, [employeeId]);
+        const [rows]: any[] = await this.dbPool.query(query, [employeeId, activeFrom ?? null, activeFrom ?? null]);
         return Array.isArray(rows) ? rows : [];
     }
 }
