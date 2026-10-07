@@ -18,4 +18,9 @@ export class NisService implements INisService {
     async getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]> {
         return this.nisRepository.getChurnListByImplementator(implementatorId, startDate, endDate);
     }
+
+    async getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]> {
+        if (customerIds.length === 0) return [];
+        return this.nisRepository.getSurveyorByCustomerIds(customerIds);
+    }
 }

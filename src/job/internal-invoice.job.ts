@@ -4,6 +4,7 @@ import { SnapshotService } from '../service/snapshot.service';
 import { SnapshotRepository } from '../repository/snapshot.repository';
 import { dashboardPool, nisPool } from '../config/database';
 import { PeriodHelper } from '../helper/period';
+import { format } from 'date-fns';
 
 const nisRepository = new NisRepository(nisPool);
 const nisService = new NisService(nisRepository);
@@ -121,11 +122,49 @@ async function syncInternalInvoices(startDate: string, endDate: string) {
     }
 }
 
+/**
+ * Implementator yang baru diisi di NIS setelah periode invoice-nya tutup: komisi implementatornya
+ * dialihkan ke periode berjalan (implementator_period_date = hari ini), bukan ke periode yang sudah tutup.
+ * Komisi sales/manager tetap di periode paid_date. Dijalankan sebelum sync supaya re-sync periode
+ * sebelumnya (tanggal 26-31) tidak keburu mengisi implementator ke periode lama.
+ */
+async function carryOverLateImplementators() {
+    const previous = periodHelper.getStartAndEndDateForPreviousMonth();
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    try {
+        const rows = await snapshotRepository.getSnapshotsWithoutImplementator(previous.startDate, previous.endDate);
+        if (rows.length === 0) return;
+
+        const customerIds = Array.from(new Set(rows.map(row => row.customer_id).filter(Boolean))) as string[];
+        const surveyors = await nisService.getSurveyorByCustomerIds(customerIds);
+        const surveyorByCustomer = new Map(surveyors.map(row => [row.customer_id, row.implementator_id]));
+
+        let movedCount = 0;
+        for (const row of rows) {
+            const implementatorId = surveyorByCustomer.get(row.customer_id);
+            if (!implementatorId) continue;
+
+            await snapshotRepository.carryOverImplementator(row.ai, implementatorId, today);
+            console.log(`[CARRY OVER] AI ${row.ai}: implementator ${implementatorId} dialihkan ke periode ${today}`);
+            movedCount++;
+        }
+
+        console.log(`[CARRY OVER] ${movedCount} of ${rows.length} invoices without implementator from ${previous.startDate} to ${previous.endDate} moved.`);
+    } catch (error: any) {
+        console.error(`[CARRY OVER ERROR] ${error.message}`);
+    }
+}
+
 async function main() {
     // Tanpa argumen: periode berjalan, ditambah periode sebelumnya mulai tanggal 26
     const periods = process.argv[2]
         ? [{ startDate: process.argv[2], endDate: process.argv[3] || periodHelper.getStartAndEndDateForCurrentMonth().endDate }]
         : periodHelper.getPeriodsToSync();
+
+    if (!process.argv[2]) {
+        await carryOverLateImplementators();
+    }
 
     for (const { startDate, endDate } of periods) {
         await syncInternalInvoices(startDate, endDate);

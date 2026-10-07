@@ -25,6 +25,10 @@ export interface SnapshotData {
     base_commission?: number | null;
     // Diisi manual lewat edit /invoice saja. Kalau terisi, dipakai sebagai MRC menggantikan hasil hitung.
     mrc_override?: number | null;
+    // Diisi manual lewat edit /invoice saja. Kalau terisi, komisi implementator dihitung di periode
+    // tanggal ini (bukan paid_date), misal implementator baru diisi setelah periode aslinya tutup.
+    // Komisi sales/manager & reward tetap ikut paid_date.
+    implementator_period_date?: Date | string | null;
 }
 
 export type SnapshotUpdateData = Partial<Omit<SnapshotData, 'ai'>>;
@@ -51,6 +55,8 @@ export interface ISnapshotRepository {
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;
+    getSnapshotsWithoutImplementator(startDate: string, endDate: string): Promise<any[]>;
+    carryOverImplementator(ai: number, implementatorId: string, periodDate: string): Promise<any>;
 }
 
 export interface ISnapshotService {

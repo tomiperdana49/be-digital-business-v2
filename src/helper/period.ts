@@ -51,38 +51,19 @@ export class PeriodHelper {
     }
 
     /**
-     * Get the start and end date for the previous month's period.
-     * Note: Currently returns the exact same logic as current month.
+     * Get the start and end date for the period before the current one.
      * 
      * @example
      * const period = helper.getStartAndEndDateForPreviousMonth();
-     * // Hasil: { startDate: '2026-05-26', endDate: '2026-06-25' } (asumsi hari ini 2026-06-04)
+     * // Hasil: { startDate: '2026-04-26', endDate: '2026-05-25' } (asumsi hari ini 2026-06-04)
      * 
      * @returns {{ startDate: string, endDate: string }} The start and end dates formatted as YYYY-MM-DD
      */
-    getStartAndEndDateForPreviousMonth(): { startDate: string; endDate: string } {
-        const today = new Date();
-        let targetMonth = today.getMonth();
-        let targetYear = today.getFullYear();
-
-        if (today.getDate() > 25) {
-            targetMonth += 1;
-            if (targetMonth > 11) {
-                targetMonth = 0;
-                targetYear += 1;
-            }
-        }
-    
-        const startMonth = targetMonth === 0 ? 11 : targetMonth - 1;
-        const startYear = targetMonth === 0 ? targetYear - 1 : targetYear;
-    
-        const startDate = new Date(startYear, startMonth, 26);
-        const endDate = new Date(targetYear, targetMonth, 25);
-    
-        return {
-            startDate: format(startDate, 'yyyy-MM-dd'),
-            endDate: format(endDate, 'yyyy-MM-dd')
-        };
+    getStartAndEndDateForPreviousMonth(date: Date = new Date()): { startDate: string; endDate: string } {
+        const { year, month } = this.getPeriodByDate(date);
+        return month === 1
+            ? this.getStartAndEndDateForMonth(year - 1, 12)
+            : this.getStartAndEndDateForMonth(year, month - 1);
     }
 
     /**

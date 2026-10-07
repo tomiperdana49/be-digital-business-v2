@@ -227,4 +227,14 @@ export class NisRepository implements INisRepository {
         const [rows] = await this.dbPool.query(query, [implementatorId, startDate, endDate]);
         return rows as any[];
     }
+
+    async getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]> {
+        const query = `
+            SELECT c.CustId AS customer_id, c.Surveyor AS implementator_id
+            FROM Customer c
+            WHERE c.CustId IN (?)
+        `;
+        const [rows] = await this.dbPool.query(query, [customerIds]);
+        return rows as any[];
+    }
 }

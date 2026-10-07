@@ -243,6 +243,7 @@ Job dijalankan via CLI (`bun run sync:*`), bukan scheduler bawaan — asumsi ada
   5. `invoice_type > 0` → `termin` jika (di luar kontrak aktif **dan** `service_group_id = 'NW'`), selain itu `recurring`.
   6. Kondisi lain fallback ke `recurring`.
 - `month_period` di-cap maksimal 12 untuk `service_group_id = 'NW'` (mis. kontrak 24 bulan dicatat sebagai 12).
+- **Carry over implementator** (hanya saat dijalankan tanpa argumen, sebelum sync): invoice NW di **periode sebelumnya** yang `implementator_id`-nya kosong dicek ke `Customer.Surveyor` di NIS. Kalau sudah terisi, `implementator_id` diisi dan `implementator_period_date` = hari ini, sehingga **hanya komisi implementator** dihitung di periode berjalan (`COALESCE(implementator_period_date, paid_date)`); komisi sales/manager & reward tetap ikut `paid_date`. Baris dengan `implementator_period_date` tidak dihapus sync dan implementatornya tidak ditimpa. Admin juga bisa mengisinya manual lewat edit di halaman Invoice (khusus NW).
 - `modal` selalu `null` (hanya relevan untuk resell).
 
 ### 7.3 `resell-invoice.job.ts` — `bun run sync:resell-invoice [startDate] [endDate]`

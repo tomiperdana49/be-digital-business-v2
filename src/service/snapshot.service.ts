@@ -93,6 +93,7 @@ export class SnapshotService implements ISnapshotService {
                 crossSellCount: row.service_type === 'internal' ? row.cross_sell_count : null,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
                 mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
+                implementatorPeriodDate: row.implementator_period_date ?? null,
                 mrc,
                 commissionPercentage,
                 commission: commissionAmount,
@@ -161,6 +162,7 @@ export class SnapshotService implements ISnapshotService {
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
                 mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
                 mrc: this.applyMrcOverride(row, ['recurring', 'termin', 'setup'].includes(row.status) ? 0 : Calculate.mrc(subscription, monthPeriod, row.status)),
+                implementatorPeriodDate: row.implementator_period_date ?? null,
                 commissionPercentage: implementatorCommissionPercentage,
                 commission: implementatorCommission,
                 isAdjust: Boolean(row.is_adjust)

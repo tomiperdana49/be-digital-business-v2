@@ -3,6 +3,7 @@ export interface INisRepository {
     getResellByDateRange(startDate: string, endDate: string): Promise<any[]>;
     getChurnCountByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<number>;
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
+    getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
 }
 
 export interface INisService {
@@ -10,4 +11,5 @@ export interface INisService {
     getResellByDateRange(startDate: string, endDate: string): Promise<any[]>;
     getChurnCountByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<number>;
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
+    getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
 }

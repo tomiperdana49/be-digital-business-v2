@@ -97,6 +97,11 @@ export class InvoiceController {
             throw new BadRequestException(`Invalid service_type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}`);
         }
 
+        if (body.implementator_period_date === '') body.implementator_period_date = null;
+        if (body.implementator_period_date != null && !/^\d{4}-\d{2}-\d{2}$/.test(String(body.implementator_period_date))) {
+            throw new BadRequestException('Invalid implementator_period_date. Must be YYYY-MM-DD or null');
+        }
+
         const result = await this.snapshotService.updateSnapshot(ai, body);
 
         if (!result) {

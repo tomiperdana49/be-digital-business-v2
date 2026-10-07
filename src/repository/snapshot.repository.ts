@@ -121,7 +121,7 @@ export class SnapshotRepository implements ISnapshotRepository {
             LEFT JOIN employees e
                 ON s.sales_id = e.employee_id
             WHERE s.implementator_id = ?
-              AND s.paid_date BETWEEN ? AND ?
+              AND COALESCE(s.implementator_period_date, s.paid_date) BETWEEN ? AND ?
               AND s.service_group_id = 'NW'
             GROUP BY s.ai
         `;
@@ -147,6 +147,7 @@ export class SnapshotRepository implements ISnapshotRepository {
             DELETE FROM snapshots
             WHERE service_type = ? AND paid_date BETWEEN ? AND ?
               AND is_adjust = false
+              AND implementator_period_date IS NULL
         `;
         const [result] = await this.dbPool.query(query, [serviceType, startDate, endDate]);
         return result;
@@ -183,7 +184,7 @@ export class SnapshotRepository implements ISnapshotRepository {
                 cross_sell_count = IF(is_adjust, cross_sell_count, VALUES(cross_sell_count)),
                 sales_id = IF(is_adjust, sales_id, VALUES(sales_id)),
                 manager_sales_id = IF(is_adjust, manager_sales_id, VALUES(manager_sales_id)),
-                implementator_id = IF(is_adjust, implementator_id, VALUES(implementator_id)),
+                implementator_id = IF(is_adjust OR implementator_period_date IS NOT NULL, implementator_id, VALUES(implementator_id)),
                 modal = IF(is_adjust, modal, VALUES(modal))
         `;
 
@@ -221,7 +222,7 @@ export class SnapshotRepository implements ISnapshotRepository {
             'customer_id', 'customer_service_id', 'customer_company', 'contract_until_date',
             'service_group_id', 'service_id', 'service_name', 'service_type',
             'cross_sell_count', 'sales_id', 'manager_sales_id', 'implementator_id', 'modal',
-            'base_commission', 'mrc_override'
+            'base_commission', 'mrc_override', 'implementator_period_date'
         ];
 
         const setClauses: string[] = [];
@@ -244,6 +245,38 @@ export class SnapshotRepository implements ISnapshotRepository {
         values.push(ai);
 
         const [result] = await this.dbPool.query(query, values);
+        return result;
+    }
+
+    /**
+     * Baris NW di rentang tanggal yang implementatornya masih kosong dan belum pernah dialihkan.
+     */
+    async getSnapshotsWithoutImplementator(startDate: string, endDate: string): Promise<any[]> {
+        const query = `
+            SELECT ai, customer_id
+            FROM snapshots
+            WHERE paid_date BETWEEN ? AND ?
+              AND service_group_id = 'NW'
+              AND (implementator_id IS NULL OR implementator_id = '')
+              AND implementator_period_date IS NULL
+        `;
+        const [rows] = await this.dbPool.query(query, [startDate, endDate]);
+        return rows as any[];
+    }
+
+    /**
+     * Isi implementator yang terlambat diisi di NIS dan alihkan komisinya ke periode periodDate.
+     * Baris dengan implementator_period_date tidak dihapus/ditimpa implementatornya oleh sync.
+     */
+    async carryOverImplementator(ai: number, implementatorId: string, periodDate: string): Promise<any> {
+        const query = `
+            UPDATE snapshots
+            SET implementator_id = ?, implementator_period_date = ?
+            WHERE ai = ?
+              AND (implementator_id IS NULL OR implementator_id = '')
+              AND implementator_period_date IS NULL
+        `;
+        const [result] = await this.dbPool.query(query, [implementatorId, periodDate, ai]);
         return result;
     }
 
