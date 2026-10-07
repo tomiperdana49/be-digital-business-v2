@@ -17,6 +17,7 @@ import { NisService } from '../service/nis.service';
 import { TargetRepository } from '../repository/target.repository';
 import { RewardService } from '../service/reward.service';
 import { dashboardPool, nisPool } from '../config/database';
+import { config } from '../config/app';
 
 const api = new Hono();
 
@@ -43,7 +44,10 @@ const targetController = new TargetController(targetRepository, employeeService)
 
 // Public Auth Routes
 api.post('/auth/login', (c) => authController.login(c));
-api.post('/auth/dev', (c) => authController.devLogin(c));
+// Login tanpa password hanya untuk development; di production route ini tidak ada (404)
+if (config.app.env !== 'production') {
+    api.post('/auth/dev', (c) => authController.devLogin(c));
+}
 api.post('/auth/google', (c) => authController.google(c));
 api.post('/auth/refresh', (c) => authController.refresh(c));
 
