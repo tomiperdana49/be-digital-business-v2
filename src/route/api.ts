@@ -5,6 +5,7 @@ import { InvoiceController } from '../controller/invoice.controller';
 import { CommissionController } from '../controller/commission.controller';
 import { AdditionalController } from '../controller/additional.controller';
 import { TargetController } from '../controller/target.controller';
+import { FeedbackController } from '../controller/feedback.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { adminMiddleware } from '../middleware/admin.middleware';
 import { SnapshotRepository } from '../repository/snapshot.repository';
@@ -15,6 +16,7 @@ import { AuthService } from '../service/auth.service';
 import { NisRepository } from '../repository/nis.repository';
 import { NisService } from '../service/nis.service';
 import { TargetRepository } from '../repository/target.repository';
+import { FeedbackRepository } from '../repository/feedback.repository';
 import { RewardService } from '../service/reward.service';
 import { dashboardPool, nisPool } from '../config/database';
 import { config } from '../config/app';
@@ -26,6 +28,7 @@ const snapshotRepository = new SnapshotRepository(dashboardPool);
 const employeeRepository = new EmployeeRepository(dashboardPool);
 const nisRepository = new NisRepository(nisPool);
 const targetRepository = new TargetRepository(dashboardPool);
+const feedbackRepository = new FeedbackRepository();
 
 // Initialize Services
 const nisService = new NisService(nisRepository);
@@ -41,6 +44,7 @@ const invoiceController = new InvoiceController(snapshotService);
 const commissionController = new CommissionController(snapshotService, employeeService, rewardService);
 const additionalController = new AdditionalController();
 const targetController = new TargetController(targetRepository, employeeService);
+const feedbackController = new FeedbackController(feedbackRepository, employeeService);
 
 // Public Auth Routes
 api.post('/auth/login', (c) => authController.login(c));
@@ -85,6 +89,8 @@ api.get('/team/:id/manager/yearly', (c) => commissionController.managerTeamYearl
 api.get('/target', authMiddleware, adminMiddleware, (c) => targetController.list(c));
 api.put('/target', authMiddleware, adminMiddleware, (c) => targetController.upsert(c));
 api.delete('/target/:id', authMiddleware, adminMiddleware, (c) => targetController.delete(c));
+// Feedback Routes (disimpan di Google Sheet; list dilihat langsung di sheet)
+api.post('/feedback', authMiddleware, (c) => feedbackController.create(c));
 
 // Additional Routes
 api.get('/additional/period', (c) => additionalController.getPeriod(c));

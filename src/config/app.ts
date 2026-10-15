@@ -29,5 +29,12 @@ export const config = {
     jwtSecret: process.env.JWT_SECRET || 'secret',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  },
+  feedback: {
+    // Web app Apps Script yang menulis feedback ke Google Sheet (lihat apps-script/feedback.gs)
+    appsScriptUrl: process.env.FEEDBACK_APPS_SCRIPT_URL || '',
+    appsScriptSecret: process.env.FEEDBACK_APPS_SCRIPT_SECRET || '',
+    // Origin publik backend ini (yang menyajikan /api/uploads), untuk link lampiran di sheet
+    appUrl: process.env.APP_URL || '',
   }
 };

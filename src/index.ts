@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { serveStatic } from 'hono/bun'
 import { config } from './config/app'
 import { api } from './route/api'
 import { Exception } from './helper/exception'
@@ -11,6 +12,9 @@ app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }))
+
+// Lampiran feedback, disajikan dengan prefix /api yang sama dengan route API
+app.use('/api/uploads/feedback/*', serveStatic({ root: './', rewriteRequestPath: (path) => path.replace(/^\/api/, '') }))
 
 // Register API Routes
 app.route('/api', api);
