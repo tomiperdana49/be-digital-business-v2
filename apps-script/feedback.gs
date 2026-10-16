@@ -20,13 +20,7 @@ function doPost(e) {
       return json({ success: false, message: 'Unauthorized' });
     }
 
-    // Sheet (tab) pertama, sama dengan gid=0
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(HEADER);
-    }
-
-    sheet.appendRow([
+    const row = [
       body.createdAt,
       body.employeeId,
       body.name,
@@ -34,7 +28,31 @@ function doPost(e) {
       body.url,
       body.message,
       (body.images || []).join('\n'),
-    ].map(asText));
+    ].map(asText);
+
+    // insertRow + setValues tidak atomik seperti appendRow, jadi kunci supaya request bersamaan tidak saling timpa
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      // Sheet (tab) pertama, sama dengan gid=0
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(HEADER);
+      }
+
+      // Feedback terbaru paling atas: sisipkan tepat di bawah header
+      sheet.insertRowAfter(1);
+      const range = sheet.getRange(2, 1, 1, row.length);
+      // Baris sisipan mewarisi format header (mis. bold); samakan dengan baris data di bawahnya
+      if (sheet.getLastRow() >= 3) {
+        sheet.getRange(3, 1, 1, row.length).copyTo(range, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      } else {
+        range.clearFormat();
+      }
+      range.setValues([row]);
+    } finally {
+      lock.releaseLock();
+    }
 
     return json({ success: true });
   } catch (err) {
