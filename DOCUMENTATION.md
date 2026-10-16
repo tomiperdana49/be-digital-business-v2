@@ -131,6 +131,7 @@ gemini.md        # Panduan konteks proyek untuk AI assistant
 | `AUTH_API_URL` | Endpoint API auth eksternal untuk verifikasi username/password | `''` |
 | `JWT_SECRET` | Secret untuk sign/verify JWT (HS256) | `'secret'` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Kredensial OAuth2 Google login | `''` |
+| `CLIENT_API_KEYS` | API key untuk client eksternal (`/commission/:email`), pisahkan dengan koma kalau lebih dari satu (untuk rotasi). Kosong = endpoint client membalas `503` | `''` |
 
 Semua nilai ini diekspor terstruktur lewat [`src/config/app.ts`](src/config/app.ts) sebagai object `config`. **Jangan** memanggil `process.env` di file lain.
 
@@ -372,6 +373,7 @@ Method yang tersedia:
 
 ### 10.3 Middleware
 - **`authMiddleware`** ([`auth.middleware.ts`](src/middleware/auth.middleware.ts)) — verifikasi `Authorization: Bearer <token>`, set `c.set('user', payload)`. Dipakai di: `/auth/me`, `/auth/logout`, `/employee/:id`, `/employee/:id/hierarchy`.
+- **`apiKeyMiddleware`** ([`api-key.middleware.ts`](src/middleware/api-key.middleware.ts)) — verifikasi header `X-API-Key` terhadap `CLIENT_API_KEYS` (perbandingan constant-time). Dipakai di `/commission/:email`.
 - **`hierarchyMiddleware`** — ⚠️ dead code, lihat §14.
 
 ### 10.4 Cakupan Proteksi Route
@@ -478,6 +480,61 @@ Query param opsional untuk semua: `?month=&year=` (default: periode berjalan, cu
 ```
 
 `/commission/:id/manager*` dan `/team/:id/manager*` mengembalikan `404 "manager not found"` jika `:id` tidak ditemukan di tabel `employees` sebagai manager (dicari via `getManagerById` → butuh `manager[0].id` untuk query staff).
+
+### Client (server-to-server, header `X-API-Key`)
+
+Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-API-Key: <salah satu CLIENT_API_KEYS>`; tanpa header / key salah → `401`, `CLIENT_API_KEYS` kosong → `503`.
+
+| Method | Path | Query | Deskripsi |
+|---|---|---|---|
+| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | Data halaman Manager Commission (monthly) per bulan, dicari lewat email karyawan |
+
+- `month`: 1 bulan (`10`) atau 2 bulan dipisah koma (`9,10`), nilai `1`–`12`, dalam `year` yang sama. Lebih dari 2 bulan / format salah → `400`.
+- `year`: 4 digit, selain itu `400`.
+- Email tidak ditemukan di tabel `employees` → `404 "employee not found"`.
+- `months` selalu array (urut bulan naik), walau hanya 1 bulan. Isi tiap item sama dengan `data` dari `/commission/:id/manager`, ditambah `period`.
+
+```bash
+curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id?month=9,10&year=2026"
+```
+
+**Contoh response** (setiap angka berformat trend vs bulan sebelumnya, lihat §8.6; `value` dalam Rupiah atau jumlah, tanpa format):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "manager commission retrieved successfully",
+  "data": {
+    "manager": { "employeeId": "0201507", "email": "nama@nusa.id", "name": "…", "jobPosition": "…", "branch": "…" },
+    "months": [
+      {
+        "period": { "year": 2026, "month": 9, "startDate": "2026-08-26", "endDate": "2026-09-25" },
+        "managerCommission": { "…": "…" }
+      },
+      {
+        "period": { "year": 2026, "month": 10, "startDate": "2026-09-26", "endDate": "2026-10-25" },
+        "managerCommission": { "trend": "down", "value": 1034631, "percentage": -82.4, "growth": -4842214 },
+        "commission": {
+          "total":     { "trend": "down", "value": 2489381, "percentage": -70.8, "growth": -6037000 },
+          "new":       { "trend": "down", "value": 2089598, "percentage": -72.6, "growth": -5537000 },
+          "recurring": { "trend": "down", "value": 399784,  "percentage": -55.6, "growth": -500000 },
+          "custLama":  { "trend": "down", "value": 412286,  "percentage": -66.8, "growth": -829000 }
+        },
+        "subscription": {
+          "total":     { "trend": "down", "value": 214348300, "percentage": -66.8, "growth": -431396700 },
+          "new":       { "…": "…" },
+          "recurring": { "…": "…" },
+          "custLama":  { "…": "…" }
+        },
+        "mrc":         { "trend": "down", "value": 6471441, "percentage": -77.7, "growth": -22507058 },
+        "newCustomer": { "trend": "down", "value": 3,  "percentage": -81.2, "growth": -13 },
+        "newAccount":  { "trend": "down", "value": 82, "percentage": -63.1, "growth": -140 },
+        "reward": null
+      }
+    ]
+  }
+}
+```
 
 ### Team (breakdown per staff — khusus manager)
 

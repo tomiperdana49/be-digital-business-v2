@@ -36,5 +36,9 @@ export const config = {
     appsScriptSecret: process.env.FEEDBACK_APPS_SCRIPT_SECRET || '',
     // Origin publik backend ini (yang menyajikan /api/uploads), untuk link lampiran di sheet
     appUrl: process.env.APP_URL || '',
+  },
+  client: {
+    // API key untuk client eksternal (/api/commission/:email), dipisah koma kalau lebih dari satu
+    apiKeys: (process.env.CLIENT_API_KEYS || '').split(',').map(key => key.trim()).filter(Boolean),
   }
 };

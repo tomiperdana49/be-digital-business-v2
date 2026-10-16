@@ -171,20 +171,74 @@ export class CommissionController {
         }
 
         const period = this.periodHelper.getPeriodFromQuery(monthQuery, yearQuery);
-        const staff = await this.employeeService.getStaffForPeriod(manager[0].id, period.year, period.month);
+        const data = await this.getManagerCommissionSummary(manager[0], period);
+        return ApiResponse.success(c, data, "manager commission retrieved successfully");
+    }
+
+    /**
+     * Versi /commission/:id/manager untuk client eksternal (lewat API key), dicari berdasarkan email.
+     * `month` boleh 1 atau 2 bulan (mis. `10` atau `9,10`) dalam `year` yang sama; data tiap bulan
+     * sama persis dengan halaman Manager Commission, ditambah periodenya.
+     */
+    async clientManagerCommission(c: Context) {
+        const { month: monthQuery, year: yearQuery } = c.req.query();
+        const email = c.req.param('email');
+
+        if (!email) {
+            return ApiResponse.error(c, "email is required", 400);
+        }
+        if (yearQuery && !/^\d{4}$/.test(yearQuery)) {
+            return ApiResponse.error(c, "invalid year parameter", 400);
+        }
+
+        let periods = [this.periodHelper.getPeriodFromQuery(null, yearQuery)];
+        if (monthQuery) {
+            const months = [...new Set(monthQuery.split(',').map(m => m.trim()))];
+            if (months.length > 2 || !months.every(m => /^(?:[1-9]|1[0-2])$/.test(m))) {
+                return ApiResponse.error(c, "invalid month parameter, expected 1 or 2 months between 1-12, e.g. 10 or 9,10", 400);
+            }
+            periods = months
+                .map(Number)
+                .sort((a, b) => a - b)
+                .map(month => this.periodHelper.getPeriodFromQuery(month, yearQuery));
+        }
+
+        const manager = await this.employeeService.getEmployeeByEmail(email);
+        if (!manager) {
+            return ApiResponse.error(c, "employee not found", 404);
+        }
+
+        const months = await Promise.all(periods.map(async period => ({
+            period,
+            ...await this.getManagerCommissionSummary(manager, period),
+        })));
+        return ApiResponse.success(c, {
+            manager: {
+                employeeId: manager.employee_id,
+                email: manager.email,
+                name: manager.name,
+                jobPosition: manager.job_position,
+                branch: manager.branch,
+            },
+            months,
+        }, "manager commission retrieved successfully");
+    }
+
+    private async getManagerCommissionSummary(manager: any, period: { year: number; month: number; startDate: string; endDate: string }) {
+        const staff = await this.employeeService.getStaffForPeriod(manager.id, period.year, period.month);
         // Manager Commission = 25% dari komisi TIM saja. Komisi pribadi manager sebagai sales
         // adalah penghasilan terpisah (dilihat lewat invoice-nya sendiri), tidak dicampur ke pool ini.
         const employeeIds = staff.map((s: any) => s.employee_id);
 
-        const data = await this.snapshotService.getManagerCommissionSummary(employeeIds, period.startDate, period.endDate, managerId);
+        const data = await this.snapshotService.getManagerCommissionSummary(employeeIds, period.startDate, period.endDate, manager.employee_id);
         const previous = this.previousPeriod(period.year, period.month);
         const [reward, previousReward] = await Promise.all([
-            this.rewardService.getManagerQuarterReward(manager[0], period.year, period.month),
-            this.rewardService.getManagerQuarterReward(manager[0], previous.year, previous.month)
+            this.rewardService.getManagerQuarterReward(manager, period.year, period.month),
+            this.rewardService.getManagerQuarterReward(manager, previous.year, previous.month)
         ]);
         data.reward = reward;
         data.managerCommission = this.withReward(data.managerCommission, reward, previousReward);
-        return ApiResponse.success(c, data, "manager commission retrieved successfully");
+        return data;
     }
 
     async managerCommissionYearly(c: Context) {

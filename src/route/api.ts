@@ -8,6 +8,7 @@ import { TargetController } from '../controller/target.controller';
 import { FeedbackController } from '../controller/feedback.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { adminMiddleware } from '../middleware/admin.middleware';
+import { apiKeyMiddleware } from '../middleware/api-key.middleware';
 import { SnapshotRepository } from '../repository/snapshot.repository';
 import { SnapshotService } from '../service/snapshot.service';
 import { EmployeeRepository } from '../repository/employee.repository';
@@ -91,6 +92,9 @@ api.put('/target', authMiddleware, adminMiddleware, (c) => targetController.upse
 api.delete('/target/:id', authMiddleware, adminMiddleware, (c) => targetController.delete(c));
 // Feedback Routes (disimpan di Google Sheet; list dilihat langsung di sheet)
 api.post('/feedback', authMiddleware, (c) => feedbackController.create(c));
+
+// Client Routes (server-to-server, autentikasi lewat header X-API-Key)
+api.get('/commission/:email', apiKeyMiddleware, (c) => commissionController.clientManagerCommission(c));
 
 // Additional Routes
 api.get('/additional/period', (c) => additionalController.getPeriod(c));
