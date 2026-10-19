@@ -487,49 +487,46 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 
 | Method | Path | Query | Deskripsi |
 |---|---|---|---|
-| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | Data halaman Manager Commission (monthly) per bulan, dicari lewat email karyawan |
+| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | New MRC, DPP & target per bulan (plus New MRC tiap staff kalau punya bawahan), dicari lewat email karyawan |
 
 - `month`: 1 bulan (`10`) atau 2 bulan dipisah koma (`9,10`), nilai `1`–`12`, dalam `year` yang sama. Lebih dari 2 bulan / format salah → `400`.
 - `year`: 4 digit, selain itu `400`.
-- Email tidak ditemukan di tabel `employees` → `404 "employee not found"`.
-- `months` selalu array (urut bulan naik), walau hanya 1 bulan. Isi tiap item sama dengan `data` dari `/commission/:id/manager`, ditambah `period`.
+- Email tidak ditemukan di tabel `employees` → `404 "employee not found"` dengan `errors: [{ "field": "email", "value": "<email>" }]`.
+- `months` selalu array (urut bulan naik), walau hanya 1 bulan. Satu struktur untuk semua orang (AM maupun SM).
+- Angka uang dalam Rupiah, dibulatkan, **tanpa PPN** (dari `nciit.dpp`).
+- `newMrc.value` = kartu **Total MRC**, `dpp.new` / `dpp.custLama` = **Total Subscription New / Recurring** di halaman Sales Commission (`/commission/:id/sales`) bulan yang sama.
+- `newMrc.byType.newCustomer` = MRC invoice status `new`; `addon` = `upgrade` / `prorate` / `add` (`termin` MRC-nya 0).
+- `newMrc.dealCount` = jumlah layanan (`customer_service_id`) berbeda yang menghasilkan MRC > 0.
+- `target.newMrc` = target New MRC bulanan (§ branch_targets); `0` untuk yang punya staff di periode itu (sama seperti reward kuartal).
+- `sales.supervisorEmail` = manager di `employee_manager_snapshots` pada bulan terakhir yang diminta; `null` kalau belum di-mapping.
+- `team` hanya terisi kalau punya staff di `employee_manager_snapshots` periode itu, selain itu `null`. `team.newMrc` = jumlah `members[].newMrc`, tidak termasuk angka pribadi (`includesOwn: false`).
 
 ```bash
 curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id?month=9,10&year=2026"
 ```
 
-**Contoh response** (setiap angka berformat trend vs bulan sebelumnya, lihat §8.6; `value` dalam Rupiah atau jumlah, tanpa format):
+**Contoh response**:
 ```json
 {
   "success": true,
   "statusCode": 200,
-  "message": "manager commission retrieved successfully",
+  "message": "sales commission retrieved successfully",
   "data": {
-    "manager": { "employeeId": "0201507", "email": "nama@nusa.id", "name": "…", "jobPosition": "…", "branch": "…" },
+    "sales": { "employeeId": "0202016", "email": "nama@nusa.id", "name": "…", "jobPosition": "Sales Manager", "branch": "…", "supervisorEmail": "atasan@nusa.id" },
     "months": [
       {
-        "period": { "year": 2026, "month": 9, "startDate": "2026-08-26", "endDate": "2026-09-25" },
-        "managerCommission": { "…": "…" }
-      },
-      {
         "period": { "year": 2026, "month": 10, "startDate": "2026-09-26", "endDate": "2026-10-25" },
-        "managerCommission": { "trend": "down", "value": 1034631, "percentage": -82.4, "growth": -4842214 },
-        "commission": {
-          "total":     { "trend": "down", "value": 2489381, "percentage": -70.8, "growth": -6037000 },
-          "new":       { "trend": "down", "value": 2089598, "percentage": -72.6, "growth": -5537000 },
-          "recurring": { "trend": "down", "value": 399784,  "percentage": -55.6, "growth": -500000 },
-          "custLama":  { "trend": "down", "value": 412286,  "percentage": -66.8, "growth": -829000 }
-        },
-        "subscription": {
-          "total":     { "trend": "down", "value": 214348300, "percentage": -66.8, "growth": -431396700 },
-          "new":       { "…": "…" },
-          "recurring": { "…": "…" },
-          "custLama":  { "…": "…" }
-        },
-        "mrc":         { "trend": "down", "value": 6471441, "percentage": -77.7, "growth": -22507058 },
-        "newCustomer": { "trend": "down", "value": 3,  "percentage": -81.2, "growth": -13 },
-        "newAccount":  { "trend": "down", "value": 82, "percentage": -63.1, "growth": -140 },
-        "reward": null
+        "target": { "newMrc": 0 },
+        "newMrc": { "value": 0, "dealCount": 0, "byType": { "newCustomer": 0, "addon": 0 } },
+        "dpp": { "total": 4716000, "new": 0, "custLama": 4716000, "includesPpn": false },
+        "team": {
+          "newMrc": 30160695,
+          "includesOwn": false,
+          "members": [
+            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5 },
+            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12 }
+          ]
+        }
       }
     ]
   }

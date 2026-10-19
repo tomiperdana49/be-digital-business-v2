@@ -176,11 +176,11 @@ export class CommissionController {
     }
 
     /**
-     * Versi /commission/:id/manager untuk client eksternal (lewat API key), dicari berdasarkan email.
-     * `month` boleh 1 atau 2 bulan (mis. `10` atau `9,10`) dalam `year` yang sama; data tiap bulan
-     * sama persis dengan halaman Manager Commission, ditambah periodenya.
+     * Untuk client eksternal (lewat API key), dicari berdasarkan email. `month` boleh 1 atau 2 bulan
+     * (mis. `10` atau `9,10`) dalam `year` yang sama. Satu struktur untuk semua orang: angka pribadi
+     * (New MRC, DPP) + target, dan `team` (New MRC per staff) hanya terisi kalau punya staff di periode itu.
      */
-    async clientManagerCommission(c: Context) {
+    async clientSalesCommission(c: Context) {
         const { month: monthQuery, year: yearQuery } = c.req.query();
         const email = c.req.param('email');
 
@@ -203,25 +203,58 @@ export class CommissionController {
                 .map(month => this.periodHelper.getPeriodFromQuery(month, yearQuery));
         }
 
-        const manager = await this.employeeService.getEmployeeByEmail(email);
-        if (!manager) {
-            return ApiResponse.error(c, "employee not found", 404);
+        const employee = await this.employeeService.getEmployeeByEmail(email);
+        if (!employee) {
+            return ApiResponse.error(c, "employee not found", 404, [{ field: "email", value: email }]);
         }
 
-        const months = await Promise.all(periods.map(async period => ({
-            period,
-            ...await this.getManagerCommissionSummary(manager, period),
-        })));
+        // Supervisor diambil dari periode terakhir yang diminta
+        const lastPeriod = periods[periods.length - 1];
+        const [targets, supervisor] = await Promise.all([
+            this.rewardService.getTargets(),
+            this.employeeService.getManagerForPeriod(employee.id, lastPeriod.year, lastPeriod.month)
+        ]);
+
+        const months = await Promise.all(periods.map(async period => {
+            const [own, staff] = await Promise.all([
+                this.snapshotService.getSalesNewMrcSummary(employee.employee_id, period.startDate, period.endDate),
+                this.employeeService.getStaffForPeriod(employee.id, period.year, period.month)
+            ]);
+
+            const members = await Promise.all(staff.map(async (s: any) => {
+                const summary = await this.snapshotService.getSalesNewMrcSummary(s.employee_id, period.startDate, period.endDate);
+                return {
+                    email: s.email,
+                    name: s.name,
+                    targetNewMrc: this.rewardService.resolveMonthlyTarget(targets, s, period.year, period.month),
+                    newMrc: summary.newMrc.value,
+                    dealCount: summary.newMrc.dealCount
+                };
+            }));
+            members.sort((a, b) => b.newMrc - a.newMrc);
+
+            return {
+                period,
+                // Sama seperti reward kuartal: yang punya staff tidak punya target New MRC pribadi
+                target: { newMrc: staff.length ? 0 : this.rewardService.resolveMonthlyTarget(targets, employee, period.year, period.month) },
+                ...own,
+                team: staff.length
+                    ? { newMrc: members.reduce((sum, m) => sum + m.newMrc, 0), includesOwn: false, members }
+                    : null
+            };
+        }));
+
         return ApiResponse.success(c, {
-            manager: {
-                employeeId: manager.employee_id,
-                email: manager.email,
-                name: manager.name,
-                jobPosition: manager.job_position,
-                branch: manager.branch,
+            sales: {
+                employeeId: employee.employee_id,
+                email: employee.email,
+                name: employee.name,
+                jobPosition: employee.job_position,
+                branch: employee.branch,
+                supervisorEmail: supervisor?.email ?? null
             },
             months,
-        }, "manager commission retrieved successfully");
+        }, "sales commission retrieved successfully");
     }
 
     private async getManagerCommissionSummary(manager: any, period: { year: number; month: number; startDate: string; endDate: string }) {

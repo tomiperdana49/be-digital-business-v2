@@ -93,6 +93,10 @@ export class RewardService {
         return target ? target.target_new_mrc : 0;
     }
 
+    async getTargets(): Promise<BranchTarget[]> {
+        return this.targetRepository.getAll();
+    }
+
     async getSalesQuarterReward(employee: TargetEmployee & { id: string }, year: number, month: number): Promise<QuarterReward | null> {
         if (!this.isRewardPeriod(year, month)) return null;
         if (await this.isManager(employee.id, year, month)) return null;

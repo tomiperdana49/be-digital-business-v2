@@ -114,6 +114,19 @@ export class EmployeeRepository implements IEmployeeRepository {
         return rows;
     }
 
+    async getManagerForPeriod(employeeInternalId: string, year: number, month: number): Promise<any | null> {
+        // Sama seperti getStaffForPeriod: hanya dari mapping periode, tanpa fallback ke employees.manager_id.
+        const query = `
+            SELECT m.*
+            FROM employee_manager_snapshots ms
+            INNER JOIN employees m ON m.id = ms.manager_id
+            WHERE ms.employee_id = ? AND ms.year = ? AND ms.month = ?
+            LIMIT 1
+        `;
+        const [rows] = await this.dbPool.query<RowDataPacket[]>(query, [employeeInternalId, year, month]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
     async upsertManagerMapping(employeeId: number, managerId: number, year: number, month: number): Promise<any> {
         const query = `
             INSERT INTO employee_manager_snapshots (employee_id, manager_id, year, month)

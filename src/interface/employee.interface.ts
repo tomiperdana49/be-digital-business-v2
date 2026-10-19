@@ -14,6 +14,7 @@ export interface IEmployeeRepository {
     getManagerById(employeeId: string): Promise<any[]>;
     getStaff(managerId: string): Promise<any[]>;
     getStaffForPeriod(managerId: string, year: number, month: number): Promise<any[]>;
+    getManagerForPeriod(employeeInternalId: string, year: number, month: number): Promise<any | null>;
     upsertManagerMapping(employeeId: number, managerId: number, year: number, month: number): Promise<any>;
     getEmployeeByEmployeeId(employeeId: string): Promise<any | null>;
     getEmployeeById(id: string): Promise<any | null>;
@@ -29,6 +30,7 @@ export interface IEmployeeService {
     getManagerById(employeeId: string): Promise<any[]>;
     getStaff(managerId: string): Promise<any[]>;
     getStaffForPeriod(managerId: string, year: number, month: number): Promise<any[]>;
+    getManagerForPeriod(employeeInternalId: string, year: number, month: number): Promise<any | null>;
     setManagerMapping(mappings: ManagerMappingInput[]): Promise<void>;
     getEmployeeByEmployeeId(employeeId: string): Promise<any | null>;
     getEmployeeById(id: string): Promise<any | null>;

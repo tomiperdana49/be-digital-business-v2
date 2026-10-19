@@ -34,6 +34,10 @@ export class EmployeeService implements IEmployeeService {
         return await this.employeeRepository.getStaffForPeriod(managerId, year, month);
     }
 
+    async getManagerForPeriod(employeeInternalId: string, year: number, month: number) {
+        return await this.employeeRepository.getManagerForPeriod(employeeInternalId, year, month);
+    }
+
     async setManagerMapping(mappings: ManagerMappingInput[]) {
         for (const mapping of mappings) {
             const employee = await this.employeeRepository.getEmployeeByEmployeeId(mapping.employeeId);

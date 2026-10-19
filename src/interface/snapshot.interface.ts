@@ -59,6 +59,15 @@ export interface ISnapshotRepository {
     carryOverImplementator(ai: number, implementatorId: string, periodDate: string): Promise<any>;
 }
 
+export interface SalesNewMrcSummary {
+    newMrc: {
+        value: number;
+        dealCount: number;
+        byType: { newCustomer: number; addon: number };
+    };
+    dpp: { total: number; new: number; custLama: number; includesPpn: false };
+}
+
 export interface ISnapshotService {
     getSnapshotList(filters: SnapshotListFilters): Promise<any>;
     getAccountManagers(): Promise<any>;
@@ -71,6 +80,7 @@ export interface ISnapshotService {
     getSalesCommissionSummary(employeeId: string, startDate: string, endDate: string): Promise<any>;
     getSalesCommissionYearlySummary(employeeId: string, year: number): Promise<any[]>;
     getSalesTotalMrc(employeeId: string, startDate: string, endDate: string): Promise<number>;
+    getSalesNewMrcSummary(employeeId: string, startDate: string, endDate: string): Promise<SalesNewMrcSummary>;
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;

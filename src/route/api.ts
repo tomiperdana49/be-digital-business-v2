@@ -94,7 +94,7 @@ api.delete('/target/:id', authMiddleware, adminMiddleware, (c) => targetControll
 api.post('/feedback', authMiddleware, (c) => feedbackController.create(c));
 
 // Client Routes (server-to-server, autentikasi lewat header X-API-Key)
-api.get('/commission/:email', apiKeyMiddleware, (c) => commissionController.clientManagerCommission(c));
+api.get('/commission/:email', apiKeyMiddleware, (c) => commissionController.clientSalesCommission(c));
 
 // Additional Routes
 api.get('/additional/period', (c) => additionalController.getPeriod(c));

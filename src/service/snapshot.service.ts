@@ -1,4 +1,4 @@
-import { ISnapshotRepository, ISnapshotService, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
+import { ISnapshotRepository, ISnapshotService, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
 import { Calculate } from '../helper/calculate';
 import { INisService } from '../interface/nis.interface';
 import { PeriodHelper } from '../helper/period';
@@ -332,6 +332,30 @@ export class SnapshotService implements ISnapshotService {
         return data.totalMrc;
     }
 
+    /**
+     * Ringkasan New MRC & DPP satu sales dalam satu periode, untuk API eksternal /commission/:email.
+     * Angkanya sama dengan kartu Total MRC & Total Subscription (New / Recurring) di halaman Sales Commission.
+     */
+    async getSalesNewMrcSummary(employeeId: string, startDate: string, endDate: string): Promise<SalesNewMrcSummary> {
+        const data = await this.aggregateSalesCommission(employeeId, startDate, endDate);
+        // Dibulatkan ke rupiah; addon = sisa supaya newCustomer + addon selalu = value
+        const value = Math.round(data.totalMrc);
+        const newCustomer = Math.round(data.mrcNew);
+        return {
+            newMrc: {
+                value,
+                dealCount: data.dealCount,
+                byType: { newCustomer, addon: value - newCustomer }
+            },
+            dpp: {
+                total: data.totalSubscription + data.subscriptionRecurring,
+                new: data.totalSubscription,
+                custLama: data.subscriptionRecurring,
+                includesPpn: false
+            }
+        };
+    }
+
     private async aggregateSalesCommission(employeeId: string, startDate: string, endDate: string) {
         const [internalSnapshots, resellSnapshots] = await Promise.all([
             this.snapshotRepository.getInternalInvoice(employeeId, startDate, endDate),
@@ -344,7 +368,16 @@ export class SnapshotService implements ISnapshotService {
         let totalSubscription = 0;
         let subscriptionRecurring = 0;
         let newAccount = 0;
+        // MRC dipecah: invoice 'new' (layanan baru) vs upgrade/prorate/add (add-on). dealKeys = layanan yang menghasilkan MRC.
+        let mrcNew = 0;
+        let mrcAddon = 0;
+        const dealKeys = new Set<string>();
         const newCustomerIds = new Set<string>();
+        const addMrc = (row: any, mrc: number) => {
+            totalMrc += mrc;
+            if (row.status === 'new') mrcNew += mrc; else mrcAddon += mrc;
+            if (mrc > 0) dealKeys.add(`${row.service_type}:${row.customer_service_id ?? `ai${row.ai}`}`);
+        };
 
         for (const row of internalSnapshots) {
             const subscription = Number(row.subscription) || 0;
@@ -360,7 +393,7 @@ export class SnapshotService implements ISnapshotService {
                 subscriptionRecurring += subscription;
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
-                totalMrc += this.applyMrcOverride(row, status !== 'termin' ? Calculate.mrc(subscription, monthPeriod, status) : 0);
+                addMrc(row, this.applyMrcOverride(row, status !== 'termin' ? Calculate.mrc(subscription, monthPeriod, status) : 0));
                 totalSubscription += subscription;
             }
 
@@ -383,7 +416,7 @@ export class SnapshotService implements ISnapshotService {
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
                 // MRC 0 utk prorate (dan upgrade sebelum periode aturan baru) resell jika ada 'new' dgn customer_service_id sama di periode ini
-                totalMrc += this.resellMrc(row, newResellServiceIds, startDate);
+                addMrc(row, this.resellMrc(row, newResellServiceIds, startDate));
                 totalSubscription += subscription;
             }
 
@@ -391,7 +424,7 @@ export class SnapshotService implements ISnapshotService {
             if (['new', 'upgrade', 'prorate', 'termin', 'add'].includes(status)) newAccount += Number(row.total_account) || 0;
         }
 
-        return { commissionNew, commissionRecurring, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount };
+        return { commissionNew, commissionRecurring, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount, mrcNew, mrcAddon, dealCount: dealKeys.size };
     }
 
     async getInternalInvoiceDetail(employeeId: string, startDate: string, endDate: string): Promise<any> {
