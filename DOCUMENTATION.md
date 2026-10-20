@@ -131,6 +131,10 @@ gemini.md        # Panduan konteks proyek untuk AI assistant
 | `AUTH_API_URL` | Endpoint API auth eksternal untuk verifikasi username/password | `''` |
 | `JWT_SECRET` | Secret untuk sign/verify JWT (HS256) | `'secret'` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Kredensial OAuth2 Google login | `''` |
+| `FEEDBACK_APPS_SCRIPT_URL` / `FEEDBACK_APPS_SCRIPT_SECRET` | Web app Apps Script yang menulis feedback ke Google Sheet (lihat [`apps-script/feedback.gs`](apps-script/feedback.gs)). Kosong = `POST /feedback` membalas `503` | `''` |
+| `APP_URL` | Origin publik backend (menyajikan `/api/uploads`), untuk link lampiran feedback | `''` |
+| `FEEDBACK_GOOGLE_CHAT_WEBHOOK_URL` | Incoming webhook Google Chat; setiap feedback yang tersimpan di sheet dikirim juga ke space ini. Gagal kirim hanya di-log, feedback tetap tersimpan. Kosong = tanpa notifikasi | `''` |
+| `FEEDBACK_SHEET_URL` | Link spreadsheet feedback, ditampilkan sebagai tombol di notifikasi Google Chat (opsional) | `''` |
 | `CLIENT_API_KEYS` | API key untuk client eksternal (`/commission/:email`), pisahkan dengan koma kalau lebih dari satu (untuk rotasi). Kosong = endpoint client membalas `503` | `''` |
 
 Semua nilai ini diekspor terstruktur lewat [`src/config/app.ts`](src/config/app.ts) sebagai object `config`. **Jangan** memanggil `process.env` di file lain.

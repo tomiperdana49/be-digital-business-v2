@@ -25,4 +25,6 @@ export interface IFeedbackRepository {
     deleteImages(fileNames: string[]): Promise<void>;
     imageUrl(fileName: string): string;
     create(data: Feedback): Promise<void>;
+    /** Kirim notifikasi feedback baru ke Google Chat (no-op kalau webhook belum diisi). */
+    notify(data: Feedback): Promise<void>;
 }

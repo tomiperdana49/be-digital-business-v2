@@ -37,22 +37,29 @@ export class FeedbackController {
         const employee = await this.employeeService.getEmployeeByEmployeeId(user.sub);
         const fileNames = await this.feedbackRepository.saveImages(user.sub, images);
 
+        const feedback = {
+            // Format "yyyy-MM-dd HH:mm:ss" WIB, supaya mudah dibaca & diurutkan di sheet
+            createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+            employeeId: user.sub,
+            name: employee?.name ?? '',
+            type: FEEDBACK_TYPES[type],
+            url,
+            message,
+            images: fileNames.map(name => this.feedbackRepository.imageUrl(name)),
+        };
+
         try {
-            await this.feedbackRepository.create({
-                // Format "yyyy-MM-dd HH:mm:ss" WIB, supaya mudah dibaca & diurutkan di sheet
-                createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
-                employeeId: user.sub,
-                name: employee?.name ?? '',
-                type: FEEDBACK_TYPES[type],
-                url,
-                message,
-                images: fileNames.map(name => this.feedbackRepository.imageUrl(name)),
-            });
+            await this.feedbackRepository.create(feedback);
         } catch (err) {
             // Feedback tidak tercatat di sheet, jadi lampirannya juga tidak disimpan
             await this.feedbackRepository.deleteImages(fileNames);
             throw err;
         }
+
+        // Feedback sudah tersimpan di sheet; notifikasi gagal tidak membatalkannya, dan tidak ditunggu
+        this.feedbackRepository.notify(feedback).catch(err => {
+            console.error('[Feedback] Google Chat notification failed:', err?.message ?? err);
+        });
 
         return ApiResponse.success(c, null, "Feedback sent successfully", 201);
     }

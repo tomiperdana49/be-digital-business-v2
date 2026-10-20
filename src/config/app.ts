@@ -36,6 +36,10 @@ export const config = {
     appsScriptSecret: process.env.FEEDBACK_APPS_SCRIPT_SECRET || '',
     // Origin publik backend ini (yang menyajikan /api/uploads), untuk link lampiran di sheet
     appUrl: process.env.APP_URL || '',
+    // Incoming webhook Google Chat untuk notifikasi feedback baru; kosong = tanpa notifikasi
+    googleChatWebhookUrl: process.env.FEEDBACK_GOOGLE_CHAT_WEBHOOK_URL || '',
+    // Link spreadsheet feedback, ditampilkan di notifikasi Google Chat (opsional)
+    sheetUrl: process.env.FEEDBACK_SHEET_URL || '',
   },
   client: {
     // API key untuk client eksternal (/api/commission/:email), dipisah koma kalau lebih dari satu

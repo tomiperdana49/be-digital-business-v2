@@ -60,4 +60,24 @@ export class FeedbackRepository implements IFeedbackRepository {
             throw new Exception('Failed to save feedback', 502);
         }
     }
+
+    async notify(data: Feedback): Promise<void> {
+        const { googleChatWebhookUrl, sheetUrl } = config.feedback;
+        if (!googleChatWebhookUrl) return;
+
+        // Format teks Google Chat: *tebal*, <url|label> untuk link
+        const lines = [
+            `*Feedback baru: ${data.type}*`,
+            `*Dari:* ${data.name || '-'} (${data.employeeId})`,
+            `*Waktu:* ${data.createdAt} WIB`,
+        ];
+        if (data.url) lines.push(`*Halaman:* ${data.url}`);
+        lines.push('', data.message);
+        if (data.images.length) {
+            lines.push('', `*Lampiran:* ${data.images.map((url, i) => `<${url}|Gambar ${i + 1}>`).join(', ')}`);
+        }
+        if (sheetUrl) lines.push('', `<${sheetUrl}|Buka Google Sheet feedback>`);
+
+        await axios.post(googleChatWebhookUrl, { text: lines.join('\n') }, { timeout: 10000 });
+    }
 }
