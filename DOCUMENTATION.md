@@ -223,7 +223,22 @@ Tabel-tabel ini **bukan** milik aplikasi ini — hanya dibaca (skema PascalCase,
 
 ## 7. Sinkronisasi Job
 
-Job dijalankan via CLI (`bun run sync:*`), bukan scheduler bawaan — asumsi ada cron eksternal (mis. `crontab`, CI scheduler) yang memanggil script ini secara berkala (kemungkinan tiap 25/26 tanggal periode, atau harian).
+Job dijalankan via CLI (`bun run sync:*`), bukan scheduler bawaan aplikasi. Di server live dijadwalkan lewat `/etc/cron.d/digital-business-commission` (user `is5`), dari folder `/home/is5/service/8058-sales-commission-digital-business-v2`. Cron menjalankan `src/` langsung, jadi perubahan kode job tidak perlu `bun run build` / `pm2 restart`.
+
+| Jadwal | Job | Keterangan |
+|---|---|---|
+| Tiap jam, menit `:01` | `internal-invoice.job.ts`, `resell-invoice.job.ts` (tanpa argumen) | Periode berjalan; tanggal 26–31 ditambah periode sebelumnya |
+| Harian `00:30` | `employee.job.ts` lalu `manager-mapping.job.ts` (tanpa argumen) | Data karyawan dari Nusawork, lalu snapshot atasan periode berjalan |
+
+Contoh baris di `/etc/cron.d/digital-business-commission` untuk job harian (sesuaikan path `bun` & folder log dengan baris lain di file itu; file di `/etc/cron.d/` wajib ada kolom user dan diakhiri baris kosong):
+
+```cron
+30 0 * * * is5 cd /home/is5/service/8058-sales-commission-digital-business-v2 && /home/is5/.bun/bin/bun src/job/employee.job.ts >> /home/is5/logs/salesboard-employee.log 2>&1 && /home/is5/.bun/bin/bun src/job/manager-mapping.job.ts >> /home/is5/logs/salesboard-employee.log 2>&1
+```
+
+- Tanpa job harian ini, perubahan di Nusawork (nama, email, jabatan, branch, atasan, resign) **tidak** masuk ke `employees` sampai `bun run sync:employee` dijalankan manual.
+- Aman dijalankan otomatis: kalau request ke Nusawork gagal, job berhenti sebelum menonaktifkan karyawan, dan `deactivateEmployeesNotIn` tidak melakukan apa-apa kalau daftar aktif kosong.
+- Re-sync invoice manual untuk periode tertentu (mis. setelah data kontrak di NIS diperbaiki setelah periodenya lewat): `bun src/job/internal-invoice.job.ts 2026-09-26 2026-10-25`. Baris `is_adjust = 1` (hasil edit form admin) tidak dihapus/ditimpa.
 
 ### 7.1 `employee.job.ts` — `bun run sync:employee`
 - Fetch 3 kategori dari Nusawork: **Sales Digital** (`Sales Nusawork` / `Sales GWS` org), **Implementator** (`Nusawork Product Manager` / `Implementator Nusawork`), **Admin** (NIK spesifik hardcode + org `Finance`/`BIS` + level `VP`/`Direksi`).
@@ -252,6 +267,11 @@ Job dijalankan via CLI (`bun run sync:*`), bukan scheduler bawaan — asumsi ada
 - **Prorata modal & month_period berbasis kalender riil**, bukan asumsi 30 hari:
   - Jika periode invoice (`period_start_date`–`period_end_date`) tepat kelipatan bulan penuh (mis. 19 Apr–18 Mei), `month_period` = jumlah bulan bulat, `modal` = modal penuh.
   - Jika tidak tepat kelipatan bulan (periode "ganjil"), hitung **prorata per hari** menggunakan jumlah hari aktual di tiap bulan kalender yang dilewati (`getDaysInMonth`), lalu jumlahkan pecahan per-chunk bulan. Ini memastikan modal & month_period akurat walau invoice dimulai di tengah bulan.
+
+### 7.4 `manager-mapping.job.ts` — `bun run sync:manager-mapping [year] [month]`
+- Menyalin `employees.manager_id` karyawan aktif ke `employee_manager_snapshots` untuk satu periode (default: periode berjalan, cut-off 26–25). Upsert, jadi aman dijalankan berulang.
+- Semua data tim (Manager Commission, Team, reward manager, `team` & `supervisorEmail` di `/commission/:email`) membaca snapshot ini, **bukan** `employees.manager_id` langsung. Jalankan setelah `sync:employee` kalau ada perubahan atasan.
+- Mapping periode yang sudah lewat tidak diubah (kecuali dijalankan dengan `year month` periode itu), supaya komisi bulan lalu tetap memakai susunan tim saat itu.
 
 ---
 
