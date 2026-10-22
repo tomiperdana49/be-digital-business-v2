@@ -185,14 +185,8 @@ export class SnapshotService implements ISnapshotService {
     }
 
     async getImplementatorCommissionSummary(implementatorId: string, startDate: string, endDate: string): Promise<any> {
-        // Hitung periode bulan lalu
-        const start = new Date(startDate);
-        const prevEnd = new Date(start);
-        prevEnd.setDate(prevEnd.getDate() - 1);
-        const prevStart = new Date(prevEnd);
-        prevStart.setDate(prevStart.getDate() - (Math.round((new Date(endDate).getTime() - start.getTime()) / (1000 * 60 * 60 * 24))));
-        const prevStartDate = prevStart.toISOString().split('T')[0];
-        const prevEndDate = prevEnd.toISOString().split('T')[0];
+        // Periode bulan lalu: tanggal 26 dua bulan lalu s/d 25 bulan lalu
+        const { startDate: prevStartDate, endDate: prevEndDate } = this.previousPeriod(endDate);
 
         const [current, previous] = await Promise.all([
             this.aggregateImplementatorCommission(implementatorId, startDate, endDate),
@@ -274,14 +268,8 @@ export class SnapshotService implements ISnapshotService {
     }
 
     async getSalesCommissionSummary(employeeId: string, startDate: string, endDate: string): Promise<any> {
-        // Hitung periode bulan lalu dari startDate
-        const start = new Date(startDate);
-        const prevEnd = new Date(start);
-        prevEnd.setDate(prevEnd.getDate() - 1);
-        const prevStart = new Date(prevEnd);
-        prevStart.setDate(prevStart.getDate() - (Math.round((new Date(endDate).getTime() - start.getTime()) / (1000 * 60 * 60 * 24))));
-        const prevStartDate = prevStart.toISOString().split('T')[0];
-        const prevEndDate = prevEnd.toISOString().split('T')[0];
+        // Periode bulan lalu: tanggal 26 dua bulan lalu s/d 25 bulan lalu
+        const { startDate: prevStartDate, endDate: prevEndDate } = this.previousPeriod(endDate);
 
         const [current, previous] = await Promise.all([
             this.aggregateSalesCommission(employeeId, startDate, endDate),
@@ -497,6 +485,10 @@ export class SnapshotService implements ISnapshotService {
      * - upgrade (jika tidak di-nol-kan): MRC dibagi bulan bulat (lihat Calculate.resellUpgradeMrc)
      * - new / prorate / add: MRC normal (subscription / monthPeriod); add < 1 bulan = subscription penuh
      */
+    private previousPeriod(endDate: string): { startDate: string; endDate: string } {
+        return new PeriodHelper().getStartAndEndDateForPreviousMonth(new Date(`${endDate}T00:00:00`));
+    }
+
     private resellMrc(row: any, newResellServiceIds: Set<any>, startDate: string): number {
         if (row.mrc_override !== null && row.mrc_override !== undefined) return Number(row.mrc_override);
 
@@ -657,14 +649,8 @@ export class SnapshotService implements ISnapshotService {
     }
 
     async getManagerCommissionSummary(employeeIds: string[], startDate: string, endDate: string, managerId?: string): Promise<any> {
-        // Hitung periode bulan lalu
-        const start = new Date(startDate);
-        const prevEnd = new Date(start);
-        prevEnd.setDate(prevEnd.getDate() - 1);
-        const prevStart = new Date(prevEnd);
-        prevStart.setDate(prevStart.getDate() - (Math.round((new Date(endDate).getTime() - start.getTime()) / (1000 * 60 * 60 * 24))));
-        const prevStartDate = prevStart.toISOString().split('T')[0];
-        const prevEndDate = prevEnd.toISOString().split('T')[0];
+        // Periode bulan lalu: tanggal 26 dua bulan lalu s/d 25 bulan lalu
+        const { startDate: prevStartDate, endDate: prevEndDate } = this.previousPeriod(endDate);
 
         // Aggregate semua staff untuk current dan previous period
         const [currentResults, previousResults] = await Promise.all([
