@@ -228,6 +228,28 @@ export class NisRepository implements INisRepository {
         return rows as any[];
     }
 
+    async getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number> {
+        if (salesIds.length === 0) return 0;
+        // MRC churn = nilai langganan per periode tagihan / jumlah bulan, untuk layanan yang unreg di periode ini.
+        // Pengecualian produk sama dengan sync invoice (domain, lisensi).
+        const query = `
+            SELECT COALESCE(SUM(cs.Subscription / COALESCE(NULLIF(itm.Month, 0), 1)), 0) AS total
+            FROM CustomerServices cs
+            LEFT JOIN Services s ON s.ServiceId = cs.ServiceId
+            LEFT JOIN InvoiceTypeMonth itm ON itm.InvoiceType = cs.InvoiceType
+            WHERE cs.SalesId IN (?)
+            AND cs.CustStatus = 'NA'
+            AND cs.CustUnregDate BETWEEN ? AND ?
+            AND s.ServiceCategory = 'digital_business'
+            AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
+            AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
+            AND LOWER(s.ServiceType) NOT LIKE '%license%';
+        `;
+        const [rows] = await this.dbPool.query(query, [salesIds, startDate, endDate]);
+        const data = rows as any[];
+        return data.length > 0 ? Number(data[0].total) : 0;
+    }
+
     async getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]> {
         const query = `
             SELECT c.CustId AS customer_id, c.Surveyor AS implementator_id

@@ -23,4 +23,8 @@ export class NisService implements INisService {
         if (customerIds.length === 0) return [];
         return this.nisRepository.getSurveyorByCustomerIds(customerIds);
     }
+
+    async getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number> {
+        return this.nisRepository.getChurnMrcBySales(salesIds, startDate, endDate);
+    }
 }

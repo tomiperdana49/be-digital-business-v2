@@ -275,6 +275,7 @@ export class SnapshotService implements ISnapshotService {
             this.aggregateSalesCommission(employeeId, startDate, endDate),
             this.aggregateSalesCommission(employeeId, prevStartDate, prevEndDate)
         ]);
+        const churn = await this.churnMrcTrend([employeeId], current.totalMrc, previous.totalMrc, startDate, endDate, prevStartDate, prevEndDate);
 
         return {
             commission: {
@@ -283,6 +284,7 @@ export class SnapshotService implements ISnapshotService {
                 total: Calculate.trend(current.commissionNew + current.commissionRecurring, previous.commissionNew + previous.commissionRecurring)
             },
             mrc: Calculate.trend(current.totalMrc, previous.totalMrc),
+            ...churn,
             subscription: {
                 new: Calculate.trend(current.totalSubscription, previous.totalSubscription),
                 recurring: Calculate.trend(current.subscriptionRecurring, previous.subscriptionRecurring),
@@ -485,6 +487,21 @@ export class SnapshotService implements ISnapshotService {
      * - upgrade (jika tidak di-nol-kan): MRC dibagi bulan bulat (lihat Calculate.resellUpgradeMrc)
      * - new / prorate / add: MRC normal (subscription / monthPeriod); add < 1 bulan = subscription penuh
      */
+    /**
+     * MRC churn (layanan yang unreg di periode, dari NIS) dan Net MRC = Total MRC - MRC churn.
+     */
+    private async churnMrcTrend(salesIds: string[], currentMrc: number, previousMrc: number, startDate: string, endDate: string, prevStartDate: string, prevEndDate: string) {
+        const [currentChurn, previousChurn] = await Promise.all([
+            this.nisService.getChurnMrcBySales(salesIds, startDate, endDate),
+            this.nisService.getChurnMrcBySales(salesIds, prevStartDate, prevEndDate)
+        ]);
+
+        return {
+            mrcChurn: Calculate.trend(currentChurn, previousChurn),
+            mrcNet: Calculate.trend(currentMrc - currentChurn, previousMrc - previousChurn)
+        };
+    }
+
     private previousPeriod(endDate: string): { startDate: string; endDate: string } {
         return new PeriodHelper().getStartAndEndDateForPreviousMonth(new Date(`${endDate}T00:00:00`));
     }
@@ -707,6 +724,8 @@ export class SnapshotService implements ISnapshotService {
         const subscriptionTotalCurrent = current.totalSubscription + current.subscriptionRecurring + managerCurrentSubscription;
         const subscriptionTotalPrevious = previous.totalSubscription + previous.subscriptionRecurring + managerPreviousSubscription;
 
+        const churn = await this.churnMrcTrend(employeeIds, current.totalMrc, previous.totalMrc, startDate, endDate, prevStartDate, prevEndDate);
+
         return {
             managerCommission: Calculate.trend(managerCommissionCurrent, managerCommissionPrevious),
             commission: {
@@ -716,6 +735,7 @@ export class SnapshotService implements ISnapshotService {
                 custLama: custLamaCommission
             },
             mrc: Calculate.trend(current.totalMrc, previous.totalMrc),
+            ...churn,
             subscription: {
                 new: Calculate.trend(current.totalSubscription, previous.totalSubscription),
                 recurring: Calculate.trend(current.subscriptionRecurring, previous.subscriptionRecurring),

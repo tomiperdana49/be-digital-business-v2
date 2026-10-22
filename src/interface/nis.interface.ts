@@ -4,6 +4,7 @@ export interface INisRepository {
     getChurnCountByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<number>;
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
     getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
+    getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number>;
 }
 
 export interface INisService {
@@ -12,4 +13,5 @@ export interface INisService {
     getChurnCountByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<number>;
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
     getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
+    getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number>;
 }
