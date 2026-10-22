@@ -513,10 +513,6 @@ export class SnapshotService implements ISnapshotService {
 
         const subscription = Number(row.subscription) || 0;
         const monthPeriod = Number(row.month_period) || 1;
-        // Addendum 003/Add/MAN-JKT/VIII/2026: MRC penambahan user resell diakui 100% DPP, berapa pun periodenya
-        if (status === 'add' && Calculate.isNewRulePeriod(startDate)) {
-            return subscription;
-        }
         if (status === 'upgrade') {
             return Calculate.resellUpgradeMrc(subscription, monthPeriod);
         }

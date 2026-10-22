@@ -73,10 +73,7 @@ async function syncInternalInvoices(startDate: string, endDate: string) {
                 } else if (row.is_prorate === 1 && row.is_upgrade === 0) {
                     status = 'prorate';
                 } else if (Number(row.invoice_type) > 0) {
-                    // SE-004/DIR/MAN-JKT/XII/2025 C.1: tarif termin hanya untuk kontrak 1 tahun pertama;
-                    // periode yang mulai >= 12 bulan sejak aktivasi adalah renewal -> recurring
-                    const isFirstContractYear = activationMonthDiff < 12;
-                    status = (!isUnderContract && isFirstContractYear && row.service_group_id === 'NW') ? 'termin' : 'recurring';
+                    status = (!isUnderContract && row.service_group_id === 'NW') ? 'termin' : 'recurring';
                 } else if (!isUnderContract && activationMonthDiff > 0) {
                     status = 'recurring';
                 } else if (row.is_upgrade === 0 && row.is_prorate === 0 && row.new_subscription === 0) {
