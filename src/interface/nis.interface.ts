@@ -5,6 +5,9 @@ export interface INisRepository {
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
     getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
     getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number>;
+    getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]>;
+    getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]>;
+    getInvoiceDatesByAi(ais: number[]): Promise<any[]>;
 }
 
 export interface INisService {
@@ -14,4 +17,7 @@ export interface INisService {
     getChurnListByImplementator(implementatorId: string, startDate: string, endDate: string): Promise<any[]>;
     getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]>;
     getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number>;
+    getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]>;
+    getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]>;
+    getInvoiceDatesByAi(ais: number[]): Promise<any[]>;
 }

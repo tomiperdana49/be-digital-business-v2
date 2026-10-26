@@ -250,6 +250,80 @@ export class NisRepository implements INisRepository {
         return data.length > 0 ? Number(data[0].total) : 0;
     }
 
+    /**
+     * Daftar layanan yang unreg di periode ini per sales, kriteria sama dengan getChurnMrcBySales
+     * (jumlah `mrc` per sales = MRC churn di dashboard).
+     */
+    async getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]> {
+        if (salesIds.length === 0) return [];
+        const query = `
+            SELECT
+                cs.SalesId AS sales_id,
+                cs.CustServId AS customer_service_id,
+                c.CustId AS customer_id,
+                c.CustCompany AS customer_company,
+                s.ServiceType AS service_name,
+                cs.CustUnregDate AS unreg_date,
+                cs.Subscription / COALESCE(NULLIF(itm.Month, 0), 1) AS mrc
+            FROM CustomerServices cs
+            LEFT JOIN Customer c ON c.CustId = cs.CustId
+            LEFT JOIN Services s ON s.ServiceId = cs.ServiceId
+            LEFT JOIN InvoiceTypeMonth itm ON itm.InvoiceType = cs.InvoiceType
+            WHERE cs.SalesId IN (?)
+            AND cs.CustStatus = 'NA'
+            AND cs.CustUnregDate BETWEEN ? AND ?
+            AND s.ServiceCategory = 'digital_business'
+            AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
+            AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
+            AND LOWER(s.ServiceType) NOT LIKE '%license%'
+            ORDER BY cs.CustUnregDate, cs.CustServId;
+        `;
+        const [rows] = await this.dbPool.query(query, [salesIds, startDate, endDate]);
+        return rows as any[];
+    }
+
+    /**
+     * MRC aktif per sales pada `date` (awal periode): sudah aktivasi sebelum tanggal itu dan belum unreg,
+     * produk sama dengan MRC churn. Status FR (gratis) tidak dihitung. Pakai SalesId & Subscription saat ini
+     * (NIS tidak menyimpan histori), jadi untuk periode lampau angkanya perkiraan.
+     */
+    async getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]> {
+        if (salesIds.length === 0) return [];
+        const query = `
+            SELECT cs.SalesId AS sales_id, COALESCE(SUM(cs.Subscription / COALESCE(NULLIF(itm.Month, 0), 1)), 0) AS total
+            FROM CustomerServices cs
+            LEFT JOIN Services s ON s.ServiceId = cs.ServiceId
+            LEFT JOIN InvoiceTypeMonth itm ON itm.InvoiceType = cs.InvoiceType
+            WHERE cs.SalesId IN (?)
+            AND cs.CustActivationDate < ?
+            AND (cs.CustStatus IN ('AC', 'BL') OR (cs.CustStatus = 'NA' AND cs.CustUnregDate >= ?))
+            AND s.ServiceCategory = 'digital_business'
+            AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
+            AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
+            AND LOWER(s.ServiceType) NOT LIKE '%license%'
+            GROUP BY cs.SalesId;
+        `;
+        const [rows] = await this.dbPool.query(query, [salesIds, date, date]);
+        return rows as any[];
+    }
+
+    async getInvoiceDatesByAi(ais: number[]): Promise<any[]> {
+        if (ais.length === 0) return [];
+        const query = `
+            SELECT
+                nci.AI AS ai,
+                cit.InvoiceDate AS invoice_date,
+                cit.InvoicePeriodStart AS period_start_date,
+                cit.InvoicePeriodEnd AS period_end_date
+            FROM NewCustomerInvoice nci
+            LEFT JOIN CustomerInvoiceTemp cit
+                ON nci.Id = cit.InvoiceNum AND nci.No = cit.Urut
+            WHERE nci.AI IN (?)
+        `;
+        const [rows] = await this.dbPool.query(query, [ais]);
+        return rows as any[];
+    }
+
     async getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]> {
         const query = `
             SELECT c.CustId AS customer_id, c.Surveyor AS implementator_id

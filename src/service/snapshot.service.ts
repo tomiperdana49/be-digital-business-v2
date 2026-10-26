@@ -1,7 +1,16 @@
-import { ISnapshotRepository, ISnapshotService, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
+import { ISnapshotRepository, ISnapshotService, SalesChurnSummary, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
 import { Calculate } from '../helper/calculate';
 import { INisService } from '../interface/nis.interface';
 import { PeriodHelper } from '../helper/period';
+import { format } from 'date-fns';
+
+/** Tanggal dari DB ke 'yyyy-MM-dd'; tanggal kosong NIS (0000-00-00) jadi null. */
+const toDateString = (value: any): string | null => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime()) || date.getFullYear() < 1901) return null;
+    return format(date, 'yyyy-MM-dd');
+};
 
 export class SnapshotService implements ISnapshotService {
     constructor(
@@ -331,11 +340,58 @@ export class SnapshotService implements ISnapshotService {
         // Dibulatkan ke rupiah; addon = sisa supaya newCustomer + addon selalu = value
         const value = Math.round(data.totalMrc);
         const newCustomer = Math.round(data.mrcNew);
+
+        // Tanggal invoice & periode kontrak tidak disimpan di snapshot, diambil dari NIS (baca saja)
+        const ais = [...data.dealRows.map(d => d.row.ai), ...data.renewalRows.map(r => r.ai)];
+        const invoiceDates = new Map<number, any>(
+            (await this.nisService.getInvoiceDatesByAi(Array.from(new Set(ais)))).map((r: any) => [Number(r.ai), r])
+        );
+        const invoiceFields = (row: any) => ({
+            ai: row.ai,
+            invoiceNo: row.invoice_number != null ? String(row.invoice_number) : null,
+            crmOpportunityId: null,
+            invoiceDate: toDateString(invoiceDates.get(Number(row.ai))?.invoice_date),
+            paidDate: toDateString(row.paid_date),
+            customerId: row.customer_id ?? null,
+            customerName: row.customer_company ?? null,
+            productName: row.service_name ?? null,
+            productLine: row.service_type
+        });
+
+        const deals = data.dealRows.map(({ row, mrc }) => ({
+            ...invoiceFields(row),
+            type: row.status === 'new' ? 'newCustomer' as const : 'addon' as const,
+            status: row.status,
+            mrc: Math.round(mrc),
+            dpp: Number(row.subscription) || 0,
+            termMonths: Number(row.month_period) || 1
+        }));
+
+        const renewals = data.renewalRows.map(row => {
+            const dpp = Number(row.subscription) || 0;
+            const termMonths = Number(row.month_period);
+            const dates = invoiceDates.get(Number(row.ai));
+            return {
+                ...invoiceFields(row),
+                contractStart: toDateString(dates?.period_start_date),
+                contractEnd: toDateString(dates?.period_end_date),
+                termMonths,
+                dpp,
+                mrc: Math.round(dpp / termMonths)
+            };
+        });
+
         return {
             newMrc: {
                 value,
                 dealCount: data.dealCount,
-                byType: { newCustomer, addon: value - newCustomer }
+                byType: { newCustomer, addon: value - newCustomer },
+                deals
+            },
+            renewals: {
+                count: renewals.length,
+                dppTotal: renewals.reduce((sum, r) => sum + r.dpp, 0),
+                items: renewals
             },
             dpp: {
                 total: data.totalSubscription + data.subscriptionRecurring,
@@ -344,6 +400,39 @@ export class SnapshotService implements ISnapshotService {
                 includesPpn: false
             }
         };
+    }
+
+    /**
+     * Churn per sales untuk API eksternal /commission/:email. `value` sama dengan kartu MRC churn
+     * (kriteria getChurnMrcBySales), `mrcActiveStart` = MRC aktif pada startDate sebagai penyebut churn rate.
+     * NIS belum mencatat downgrade dan alasan berhenti, jadi semua churn 'full' dan reason null.
+     */
+    async getSalesChurnSummary(salesIds: string[], startDate: string, endDate: string): Promise<Map<string, SalesChurnSummary>> {
+        const [churnRows, activeRows] = await Promise.all([
+            this.nisService.getChurnListBySales(salesIds, startDate, endDate),
+            this.nisService.getActiveMrcBySales(salesIds, startDate)
+        ]);
+        const activeMrc = new Map<string, number>(activeRows.map((r: any) => [r.sales_id, Number(r.total) || 0]));
+
+        return new Map(salesIds.map(salesId => {
+            const rows = churnRows.filter((r: any) => r.sales_id === salesId);
+            const value = rows.reduce((sum: number, r: any) => sum + (Number(r.mrc) || 0), 0);
+            return [salesId, {
+                value: Math.round(value),
+                customerCount: new Set(rows.map((r: any) => r.customer_id)).size,
+                mrcActiveStart: Math.round(activeMrc.get(salesId) ?? 0),
+                customers: rows.map((r: any) => ({
+                    customerServiceId: r.customer_service_id,
+                    customerId: r.customer_id ?? null,
+                    customerName: r.customer_company ?? null,
+                    productName: r.service_name ?? null,
+                    churnType: 'full' as const,
+                    mrcLost: Math.round(Number(r.mrc) || 0),
+                    effectiveDate: toDateString(r.unreg_date),
+                    reason: null
+                }))
+            }];
+        }));
     }
 
     private async aggregateSalesCommission(employeeId: string, startDate: string, endDate: string) {
@@ -363,10 +452,14 @@ export class SnapshotService implements ISnapshotService {
         let mrcAddon = 0;
         const dealKeys = new Set<string>();
         const newCustomerIds = new Set<string>();
+        // Rincian per invoice untuk API eksternal: baris yang membawa MRC, dan recurring tahunan (renewal)
+        const dealRows: { row: any; mrc: number }[] = [];
+        const renewalRows: any[] = [];
         const addMrc = (row: any, mrc: number) => {
             totalMrc += mrc;
             if (row.status === 'new') mrcNew += mrc; else mrcAddon += mrc;
             if (mrc > 0) dealKeys.add(`${row.service_type}:${row.customer_service_id ?? `ai${row.ai}`}`);
+            if (mrc !== 0) dealRows.push({ row, mrc });
         };
 
         for (const row of internalSnapshots) {
@@ -381,6 +474,7 @@ export class SnapshotService implements ISnapshotService {
             if (status === 'recurring') {
                 commissionRecurring += commissionAmount;
                 subscriptionRecurring += subscription;
+                if (Number(row.month_period) >= 12) renewalRows.push(row);
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
                 addMrc(row, this.applyMrcOverride(row, status !== 'termin' ? Calculate.mrc(subscription, monthPeriod, status) : 0));
@@ -403,6 +497,7 @@ export class SnapshotService implements ISnapshotService {
             if (status === 'recurring') {
                 commissionRecurring += commissionAmount;
                 subscriptionRecurring += subscription;
+                if (Number(row.month_period) >= 12) renewalRows.push(row);
             } else if (['new', 'prorate', 'upgrade', 'termin', 'add'].includes(status)) {
                 commissionNew += commissionAmount;
                 // MRC 0 utk prorate (dan upgrade sebelum periode aturan baru) resell jika ada 'new' dgn customer_service_id sama di periode ini
@@ -414,7 +509,7 @@ export class SnapshotService implements ISnapshotService {
             if (['new', 'upgrade', 'prorate', 'termin', 'add'].includes(status)) newAccount += Number(row.total_account) || 0;
         }
 
-        return { commissionNew, commissionRecurring, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount, mrcNew, mrcAddon, dealCount: dealKeys.size };
+        return { commissionNew, commissionRecurring, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount, mrcNew, mrcAddon, dealCount: dealKeys.size, dealRows, renewalRows };
     }
 
     async getInternalInvoiceDetail(employeeId: string, startDate: string, endDate: string): Promise<any> {

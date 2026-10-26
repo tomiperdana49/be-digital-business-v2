@@ -27,4 +27,16 @@ export class NisService implements INisService {
     async getChurnMrcBySales(salesIds: string[], startDate: string, endDate: string): Promise<number> {
         return this.nisRepository.getChurnMrcBySales(salesIds, startDate, endDate);
     }
+
+    async getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]> {
+        return this.nisRepository.getChurnListBySales(salesIds, startDate, endDate);
+    }
+
+    async getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]> {
+        return this.nisRepository.getActiveMrcBySales(salesIds, date);
+    }
+
+    async getInvoiceDatesByAi(ais: number[]): Promise<any[]> {
+        return this.nisRepository.getInvoiceDatesByAi(ais);
+    }
 }

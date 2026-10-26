@@ -59,13 +59,67 @@ export interface ISnapshotRepository {
     carryOverImplementator(ai: number, implementatorId: string, periodDate: string): Promise<any>;
 }
 
+export interface SalesDeal {
+    ai: number;
+    invoiceNo: string | null;
+    crmOpportunityId: null;
+    invoiceDate: string | null;
+    paidDate: string | null;
+    customerId: string | null;
+    customerName: string | null;
+    productName: string | null;
+    productLine: 'internal' | 'resell';
+    type: 'newCustomer' | 'addon';
+    status: string;
+    mrc: number;
+    dpp: number;
+    termMonths: number;
+}
+
+export interface SalesRenewal {
+    ai: number;
+    invoiceNo: string | null;
+    crmOpportunityId: null;
+    invoiceDate: string | null;
+    paidDate: string | null;
+    customerId: string | null;
+    customerName: string | null;
+    productName: string | null;
+    productLine: 'internal' | 'resell';
+    contractStart: string | null;
+    contractEnd: string | null;
+    termMonths: number;
+    dpp: number;
+    mrc: number;
+}
+
 export interface SalesNewMrcSummary {
     newMrc: {
         value: number;
         dealCount: number;
         byType: { newCustomer: number; addon: number };
+        deals: SalesDeal[];
     };
+    renewals: { count: number; dppTotal: number; items: SalesRenewal[] };
     dpp: { total: number; new: number; custLama: number; includesPpn: false };
+}
+
+export interface SalesChurnCustomer {
+    customerServiceId: number;
+    customerId: string | null;
+    customerName: string | null;
+    productName: string | null;
+    churnType: 'full';
+    mrcLost: number;
+    effectiveDate: string | null;
+    reason: null;
+}
+
+export interface SalesChurnSummary {
+    value: number;
+    customerCount: number;
+    mrcActiveStart: number;
+    customers: SalesChurnCustomer[];
 }
 
 export interface ISnapshotService {
@@ -81,6 +135,7 @@ export interface ISnapshotService {
     getSalesCommissionYearlySummary(employeeId: string, year: number): Promise<any[]>;
     getSalesTotalMrc(employeeId: string, startDate: string, endDate: string): Promise<number>;
     getSalesNewMrcSummary(employeeId: string, startDate: string, endDate: string): Promise<SalesNewMrcSummary>;
+    getSalesChurnSummary(salesIds: string[], startDate: string, endDate: string): Promise<Map<string, SalesChurnSummary>>;
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;

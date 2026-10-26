@@ -511,7 +511,7 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 
 | Method | Path | Query | Deskripsi |
 |---|---|---|---|
-| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | New MRC, DPP & target per bulan (plus New MRC tiap staff kalau punya bawahan), dicari lewat email karyawan |
+| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | New MRC (+ rincian deal), churn, renewal, DPP & target per bulan (plus New MRC & churn tiap staff kalau punya bawahan), dicari lewat email karyawan |
 
 - `month`: 1 bulan (`10`) atau 2 bulan dipisah koma (`9,10`), nilai `1`–`12`, dalam `year` yang sama. Lebih dari 2 bulan / format salah → `400`.
 - `year`: 4 digit, selain itu `400`.
@@ -524,6 +524,22 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 - `target.newMrc` = target New MRC bulanan (§ branch_targets); `0` untuk yang punya staff di periode itu (sama seperti reward kuartal).
 - `sales.supervisorEmail` = manager di `employee_manager_snapshots` pada bulan terakhir yang diminta; `null` kalau belum di-mapping.
 - `team` hanya terisi kalau punya staff di `employee_manager_snapshots` periode itu, selain itu `null`. `team.newMrc` = jumlah `members[].newMrc`, tidak termasuk angka pribadi (`includesOwn: false`).
+- Tanggal format `YYYY-MM-DD`; tanggal kosong di NIS → `null`. `crmOpportunityId` selalu `null` (NIS belum mencatat ID opportunity NusaProspect).
+
+**`newMrc.deals[]`** — satu baris per invoice (`ai`) yang membawa MRC ≠ 0, dari perhitungan yang sama dengan `newMrc.value`:
+- Jumlah `deals[].mrc` = `newMrc.value` (bisa selisih beberapa rupiah karena pembulatan per baris). Jumlah baris bisa > `dealCount` karena `dealCount` menghitung layanan, `deals` menghitung invoice.
+- `type`: `newCustomer` (status `new`) / `addon` (`upgrade`, `prorate`, `add`); `status` = status asli snapshot. `productLine`: `internal` / `resell`.
+- `dpp` = nilai invoice tanpa PPN, `termMonths` = `month_period` snapshot (resell prorate/add bisa pecahan). `invoiceDate` dari `CustomerInvoiceTemp.InvoiceDate` NIS.
+
+**`churn`** — layanan digital business milik sales yang unreg (`CustStatus = 'NA'`, `CustUnregDate` di periode), kriteria sama dengan kartu MRC churn dashboard:
+- `value` = kartu **MRC churn** (dibulatkan); `customerCount` = jumlah `customerId` berbeda; `customers[]` per layanan, `mrcLost` = `Subscription / bulan InvoiceType`, `effectiveDate` = `CustUnregDate`.
+- `churnType` selalu `full` dan `reason` selalu `null`: NIS belum mencatat downgrade maupun alasan berhenti.
+- `mrcActiveStart` = MRC layanan (produk sama) yang sudah aktivasi sebelum `period.startDate` dan berstatus `AC`/`BL`, atau `NA` dengan `CustUnregDate >= startDate`. Status `FR` tidak dihitung. **Perkiraan**: NIS hanya menyimpan `SalesId` & `Subscription` saat ini, jadi untuk periode lampau angka bisa bergeser kalau layanan pindah AM / harga berubah.
+- `team.members[].churn` berisi `value`, `customerCount`, `mrcActiveStart` (tanpa daftar pelanggan).
+
+**`renewals`** — invoice `recurring` dengan `month_period >= 12` (perpanjangan tahunan/multi-tahun), tanpa filter nilai; pemilik = `sales_id` snapshot:
+- `count`, `dppTotal` (jumlah `items[].dpp`), `items[]` dengan `contractStart` / `contractEnd` dari `InvoicePeriodStart` / `InvoicePeriodEnd` NIS, `mrc = dpp / termMonths`.
+- Invoice prepaid bisa punya `paidDate` lebih awal dari `invoiceDate`.
 
 ```bash
 curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id?month=9,10&year=2026"
@@ -541,14 +557,38 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
       {
         "period": { "year": 2026, "month": 10, "startDate": "2026-09-26", "endDate": "2026-10-25" },
         "target": { "newMrc": 0 },
-        "newMrc": { "value": 0, "dealCount": 0, "byType": { "newCustomer": 0, "addon": 0 } },
-        "dpp": { "total": 4716000, "new": 0, "custLama": 4716000, "includesPpn": false },
+        "newMrc": {
+          "value": 521667, "dealCount": 1, "byType": { "newCustomer": 521667, "addon": 0 },
+          "deals": [
+            { "ai": 2003099, "invoiceNo": "900682708", "crmOpportunityId": null, "invoiceDate": "2026-10-02", "paidDate": "2026-10-03",
+              "customerId": "0200000001", "customerName": "PT Contoh Baru", "productName": "Google Workspace Business Standard",
+              "productLine": "resell", "type": "newCustomer", "status": "new", "mrc": 521667, "dpp": 6260000, "termMonths": 12 }
+          ]
+        },
+        "renewals": {
+          "count": 1, "dppTotal": 2189000,
+          "items": [
+            { "ai": 2009370, "invoiceNo": "900685137", "crmOpportunityId": null, "invoiceDate": "2026-10-21", "paidDate": "2026-10-09",
+              "customerId": "0200000002", "customerName": "PT Contoh Perpanjang", "productName": "Nusa Web Hosting Bisnis Prepaid",
+              "productLine": "internal", "contractStart": "2026-10-21", "contractEnd": "2027-10-20", "termMonths": 12, "dpp": 2189000, "mrc": 182417 }
+          ]
+        },
+        "dpp": { "total": 10976000, "new": 6260000, "custLama": 4716000, "includesPpn": false },
+        "churn": {
+          "value": 366000, "customerCount": 1, "mrcActiveStart": 140033517,
+          "customers": [
+            { "customerServiceId": 85867, "customerId": "0200000003", "customerName": "PT Contoh Berhenti", "productName": "Google Workspace Business Standard",
+              "churnType": "full", "mrcLost": 366000, "effectiveDate": "2026-09-26", "reason": null }
+          ]
+        },
         "team": {
           "newMrc": 30160695,
           "includesOwn": false,
           "members": [
-            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5 },
-            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12 }
+            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5,
+              "churn": { "value": 2201467, "customerCount": 3, "mrcActiveStart": 1128849092 } },
+            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12,
+              "churn": { "value": 0, "customerCount": 0, "mrcActiveStart": 129890333 } }
           ]
         }
       }

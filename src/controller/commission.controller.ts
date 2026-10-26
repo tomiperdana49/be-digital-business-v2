@@ -220,15 +220,25 @@ export class CommissionController {
                 this.snapshotService.getSalesNewMrcSummary(employee.employee_id, period.startDate, period.endDate),
                 this.employeeService.getStaffForPeriod(employee.id, period.year, period.month)
             ]);
+            // Churn diambil sekali dari NIS untuk sales ini + semua staff-nya
+            const churn = await this.snapshotService.getSalesChurnSummary(
+                [employee.employee_id, ...staff.map((s: any) => s.employee_id)], period.startDate, period.endDate
+            );
 
             const members = await Promise.all(staff.map(async (s: any) => {
                 const summary = await this.snapshotService.getSalesNewMrcSummary(s.employee_id, period.startDate, period.endDate);
+                const memberChurn = churn.get(s.employee_id)!;
                 return {
                     email: s.email,
                     name: s.name,
                     targetNewMrc: this.rewardService.resolveMonthlyTarget(targets, s, period.year, period.month),
                     newMrc: summary.newMrc.value,
-                    dealCount: summary.newMrc.dealCount
+                    dealCount: summary.newMrc.dealCount,
+                    churn: {
+                        value: memberChurn.value,
+                        customerCount: memberChurn.customerCount,
+                        mrcActiveStart: memberChurn.mrcActiveStart
+                    }
                 };
             }));
             members.sort((a, b) => b.newMrc - a.newMrc);
@@ -238,6 +248,7 @@ export class CommissionController {
                 // Sama seperti reward kuartal: yang punya staff tidak punya target New MRC pribadi
                 target: { newMrc: staff.length ? 0 : this.rewardService.resolveMonthlyTarget(targets, employee, period.year, period.month) },
                 ...own,
+                churn: churn.get(employee.employee_id)!,
                 team: staff.length
                     ? { newMrc: members.reduce((sum, m) => sum + m.newMrc, 0), includesOwn: false, members }
                     : null
