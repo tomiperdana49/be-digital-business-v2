@@ -493,7 +493,7 @@ export class SnapshotService implements ISnapshotService {
     /**
      * Churn per sales untuk API eksternal /commission/:email. `value` sama dengan kartu MRC churn
      * (kriteria getChurnMrcBySales), `mrcActiveStart` = MRC aktif pada startDate sebagai penyebut churn rate.
-     * NIS belum mencatat downgrade dan alasan berhenti, jadi semua churn 'full' dan reason null.
+     * NIS belum mencatat downgrade, jadi semua churn 'full'; reason = CustCloseReason (teks bebas dari NIS).
      */
     async getSalesChurnSummary(salesIds: string[], startDate: string, endDate: string): Promise<Map<string, SalesChurnSummary>> {
         const [churnRows, activeRows] = await Promise.all([
@@ -517,7 +517,7 @@ export class SnapshotService implements ISnapshotService {
                     churnType: 'full' as const,
                     mrcLost: Math.round(Number(r.mrc) || 0),
                     effectiveDate: toDateString(r.unreg_date),
-                    reason: null
+                    reason: r.close_reason ?? null
                 }))
             }];
         }));

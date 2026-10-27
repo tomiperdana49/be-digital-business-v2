@@ -544,7 +544,7 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 
 **`churn`** — layanan digital business milik sales yang unreg (`CustStatus = 'NA'`, `CustUnregDate` di periode), kriteria sama dengan kartu MRC churn dashboard:
 - `value` = kartu **MRC churn** (dibulatkan); `customerCount` = jumlah `customerId` berbeda; `customers[]` per layanan, `mrcLost` = `Subscription / bulan InvoiceType`, `effectiveDate` = `CustUnregDate`.
-- `churnType` selalu `full` dan `reason` selalu `null`: NIS belum mencatat downgrade maupun alasan berhenti.
+- `churnType` selalu `full`: NIS belum mencatat downgrade. `reason` = alasan berhenti dari NIS (`CustCloseReason`, teks bebas yang diisi saat unreg; `null` kalau kosong).
 - `mrcActiveStart` = MRC layanan (produk sama) yang sudah aktivasi sebelum `period.startDate` dan berstatus `AC`/`BL`, atau `NA` dengan `CustUnregDate >= startDate`. Status `FR` tidak dihitung. **Perkiraan**: NIS hanya menyimpan `SalesId` & `Subscription` saat ini, jadi untuk periode lampau angka bisa bergeser kalau layanan pindah AM / harga berubah.
 - `team.members[].churn` berisi `value`, `customerCount`, `mrcActiveStart` (tanpa daftar pelanggan).
 
@@ -599,7 +599,7 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
           "value": 366000, "customerCount": 1, "mrcActiveStart": 140033517,
           "customers": [
             { "customerServiceId": 85867, "customerId": "0200000003", "customerName": "PT Contoh Berhenti", "productName": "Google Workspace Business Standard",
-              "churnType": "full", "mrcLost": 366000, "effectiveDate": "2026-09-26", "reason": null }
+              "churnType": "full", "mrcLost": 366000, "effectiveDate": "2026-09-26", "reason": "tidak lanjut berlangganan" }
           ]
         },
         "team": {

@@ -134,7 +134,7 @@ export interface SalesChurnCustomer {
     churnType: 'full';
     mrcLost: number;
     effectiveDate: string | null;
-    reason: null;
+    reason: string | null;
 }
 
 export interface SalesChurnSummary {
