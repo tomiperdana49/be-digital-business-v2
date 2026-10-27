@@ -511,7 +511,7 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 
 | Method | Path | Query | Deskripsi |
 |---|---|---|---|
-| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | New MRC (+ rincian deal), churn, renewal, DPP & target per bulan (plus New MRC & churn tiap staff kalau punya bawahan), dicari lewat email karyawan |
+| GET | `/commission/:email` | `?month=&year=` (opsional, default periode berjalan) | New MRC (+ rincian deal), cross-sell, churn, renewal, DPP & target per bulan (plus New MRC & churn tiap staff kalau punya bawahan), dicari lewat email karyawan |
 
 - `month`: 1 bulan (`10`) atau 2 bulan dipisah koma (`9,10`), nilai `1`–`12`, dalam `year` yang sama. Lebih dari 2 bulan / format salah → `400`.
 - `year`: 4 digit, selain itu `400`.
@@ -530,6 +530,12 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 - Jumlah `deals[].mrc` = `newMrc.value` (bisa selisih beberapa rupiah karena pembulatan per baris). Jumlah baris bisa > `dealCount` karena `dealCount` menghitung layanan, `deals` menghitung invoice.
 - `type`: `newCustomer` (status `new`) / `addon` (`upgrade`, `prorate`, `add`); `status` = status asli snapshot. `productLine`: `internal` / `resell`.
 - `dpp` = nilai invoice tanpa PPN, `termMonths` = `month_period` snapshot (resell prorate/add bisa pecahan). `invoiceDate` dari `CustomerInvoiceTemp.InvoiceDate` NIS.
+
+**`crossSell`** — deal cross-sell, definisi sama dengan aturan komisi 15%: invoice **internal** `new`/`termin` dengan `cross_sell_count > 0` (customer sudah punya layanan digital business lain selain domain):
+- Hanya catatan/informasi: deal cross-sell **sudah termasuk** di `newMrc.value` dan `newMrc.deals[]`. Jangan dijumlahkan ke maupun dikurangkan dari `newMrc`; total New MRC tetap `newMrc.value`.
+- `deals[]` = subset `newMrc.deals[]` (format sama), `value` = jumlah `deals[].mrc`, `count` = jumlah invoice. `termin` MRC-nya 0 sehingga tidak muncul.
+- Resell tidak pernah dihitung cross-sell (`cross_sell_count` resell selalu 0).
+- `team.members[].crossSell` berisi `value` dan `count` (tanpa daftar deal).
 
 **`churn`** — layanan digital business milik sales yang unreg (`CustStatus = 'NA'`, `CustUnregDate` di periode), kriteria sama dengan kartu MRC churn dashboard:
 - `value` = kartu **MRC churn** (dibulatkan); `customerCount` = jumlah `customerId` berbeda; `customers[]` per layanan, `mrcLost` = `Subscription / bulan InvoiceType`, `effectiveDate` = `CustUnregDate`.
@@ -565,6 +571,14 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
               "productLine": "resell", "type": "newCustomer", "status": "new", "mrc": 521667, "dpp": 6260000, "termMonths": 12 }
           ]
         },
+        "crossSell": {
+          "value": 19000, "count": 1,
+          "deals": [
+            { "ai": 2024001, "invoiceNo": "900690001", "crmOpportunityId": null, "invoiceDate": "2026-10-10", "paidDate": "2026-10-12",
+              "customerId": "0200000004", "customerName": "PT Contoh Cross Sell", "productName": "Nusa Web Hosting Starter Prepaid",
+              "productLine": "internal", "type": "newCustomer", "status": "new", "mrc": 19000, "dpp": 228000, "termMonths": 12 }
+          ]
+        },
         "renewals": {
           "count": 1, "dppTotal": 2189000,
           "items": [
@@ -585,9 +599,9 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
           "newMrc": 30160695,
           "includesOwn": false,
           "members": [
-            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5,
+            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5, "crossSell": { "value": 695000, "count": 1 },
               "churn": { "value": 2201467, "customerCount": 3, "mrcActiveStart": 1128849092 } },
-            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12,
+            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12, "crossSell": { "value": 0, "count": 0 },
               "churn": { "value": 0, "customerCount": 0, "mrcActiveStart": 129890333 } }
           ]
         }

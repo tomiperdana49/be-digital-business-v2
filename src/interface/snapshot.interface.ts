@@ -100,6 +100,7 @@ export interface SalesNewMrcSummary {
         byType: { newCustomer: number; addon: number };
         deals: SalesDeal[];
     };
+    crossSell: { value: number; count: number; deals: SalesDeal[] };
     renewals: { count: number; dppTotal: number; items: SalesRenewal[] };
     dpp: { total: number; new: number; custLama: number; includesPpn: false };
 }

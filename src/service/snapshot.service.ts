@@ -378,6 +378,12 @@ export class SnapshotService implements ISnapshotService {
             termMonths: Number(row.month_period) || 1
         }));
 
+        // Cross-sell = deal internal new/termin dengan cross_sell_count > 0 (baris yang komisinya 15%)
+        const crossSellDeals = deals.filter((_, i) => {
+            const row = data.dealRows[i].row;
+            return row.service_type === 'internal' && ['new', 'termin'].includes(row.status) && Number(row.cross_sell_count) > 0;
+        });
+
         const renewals = data.renewalRows.map(row => {
             const dpp = Number(row.subscription) || 0;
             const termMonths = Number(row.month_period);
@@ -398,6 +404,11 @@ export class SnapshotService implements ISnapshotService {
                 dealCount: data.dealCount,
                 byType: { newCustomer, addon: value - newCustomer },
                 deals
+            },
+            crossSell: {
+                value: crossSellDeals.reduce((sum, d) => sum + d.mrc, 0),
+                count: crossSellDeals.length,
+                deals: crossSellDeals
             },
             renewals: {
                 count: renewals.length,

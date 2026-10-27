@@ -234,6 +234,7 @@ export class CommissionController {
                     targetNewMrc: this.rewardService.resolveMonthlyTarget(targets, s, period.year, period.month),
                     newMrc: summary.newMrc.value,
                     dealCount: summary.newMrc.dealCount,
+                    crossSell: { value: summary.crossSell.value, count: summary.crossSell.count },
                     churn: {
                         value: memberChurn.value,
                         customerCount: memberChurn.customerCount,
