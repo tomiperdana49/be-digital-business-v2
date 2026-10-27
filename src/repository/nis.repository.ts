@@ -99,6 +99,8 @@ export class NisRepository implements INisRepository {
                     ON cs2.ServiceId = s2.ServiceId
                 WHERE (cs2.CustStatus IS NULL OR cs2.CustStatus <> 'NA')
                 AND (s2.ServiceCategory = 'digital_business')
+                -- Domain tidak dihitung cross-sell
+                AND (s2.ServiceGroup IS NULL OR s2.ServiceGroup <> 'DO')
             ) AS cross_tbl 
                 ON cross_tbl.CustId = nci.CustId AND cross_tbl.ServiceId <> cs.ServiceId
             WHERE s.BusinessOperation = 'internal'
@@ -147,7 +149,30 @@ export class NisRepository implements INisRepository {
                 s.BusinessOperation AS service_type,
                 cs.SalesId AS sales_id,
                 cs.ManagerSalesId AS sales_manager_id,
-                cs.InvoiceType AS invoice_type
+                cs.InvoiceType AS invoice_type,
+                -- Invoice bulan penuh pertama setelah prorate awal: NIS membuat 2 invoice terpisah saat aktivasi
+                -- di tengah bulan (prorate + bulan penuh), dan invoice bulan penuhnya tidak ditandai new_subscription.
+                (nciit.is_prorata = 0 AND nciit.new_subscription = 0
+                    AND EXISTS (
+                        SELECT 1
+                        FROM CustomerInvoiceTemp cit2
+                        JOIN NewCustomerInvoice nci2 ON nci2.Id = cit2.InvoiceNum AND nci2.No = cit2.Urut
+                        JOIN NewCustomerInvoiceInternetCounter n2 ON n2.AI = nci2.AI
+                        WHERE cit2.CustServId = cs.CustServId
+                            AND n2.AI < nciit.AI
+                            AND n2.is_prorata = 1
+                            AND n2.new_subscription > 0
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM CustomerInvoiceTemp cit2
+                        JOIN NewCustomerInvoice nci2 ON nci2.Id = cit2.InvoiceNum AND nci2.No = cit2.Urut
+                        JOIN NewCustomerInvoiceInternetCounter n2 ON n2.AI = nci2.AI
+                        WHERE cit2.CustServId = cs.CustServId
+                            AND n2.AI < nciit.AI
+                            AND n2.is_prorata = 0
+                    )
+                ) AS is_first_full_invoice
             FROM NewCustomerInvoiceInternetCounter nciit
             LEFT JOIN NewCustomerInvoice nci 
                 ON nciit.AI = nci.AI

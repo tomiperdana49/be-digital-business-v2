@@ -23,6 +23,12 @@ async function syncResellInvoices(startDate: string, endDate: string) {
         const rows = await nisService.getResellByDateRange(startDate, endDate);
         console.log(`[SYNC] Found ${rows.length} resell invoices.`);
 
+        // Layanan yang prorate awalnya dibayar di periode ini. Hanya untuk mereka invoice bulan penuh pertama
+        // dijadikan 'new': kalau prorate-nya di periode lain, MRC sudah tercatat di sana (hindari dobel MRC).
+        const initialProrateServiceIds = new Set(
+            rows.filter((r: any) => r.is_prorate === 1 && Number(r.new_subscription) > 0).map((r: any) => r.customer_service_id)
+        );
+
         let successCount = 0;
         let errorCount = 0;
 
@@ -39,6 +45,12 @@ async function syncResellInvoices(startDate: string, endDate: string) {
                     status = 'prorate';
                 } else if (row.is_upgrade === 0 && row.is_prorate === 0 && row.new_subscription === 0) {
                     status = 'recurring';
+                }
+                // Bulan penuh pertama setelah prorate awal di periode yang sama = invoice new
+                // (MRC di sini; prorate-nya jadi MRC 0 lewat aturan dedup resellMrc)
+                if (status === 'recurring' && Number(row.is_first_full_invoice) === 1
+                    && initialProrateServiceIds.has(row.customer_service_id)) {
+                    status = 'new';
                 }
 
                 let finalModal = Number(row.modal) || 0;
