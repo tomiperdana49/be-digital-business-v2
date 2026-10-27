@@ -534,9 +534,10 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 **`crossSell`** — deal cross-sell, kreditnya untuk **AM Resell** pemilik customer. Deal = invoice **internal** `new`/`termin` dengan `cross_sell_count > 0` (aturan komisi 15%: customer sudah/bersamaan punya layanan digital business lain selain domain) yang membawa MRC:
 - Contoh: AM A menjual Nusawork (MRC 1.000.000) ke customer yang Google Workspace-nya dipegang AM B → `newMrc` AM A +1.000.000 (seperti biasa), `crossSell.value` AM B +1.000.000, dan deal itu muncul di `crossSell.asSeller` AM A.
 - AM Resell = `SalesId` layanan resell aktif (bukan NA, bukan domain) di customer ID yang sama di NIS saat ini; kalau lebih dari satu, kredit ke yang aktivasi resell-nya paling awal (`resellOwnerEmail`), semua tercantum di `resellOwnerEmails`.
-- Customer tanpa layanan resell (cross-sell karena layanan internal lain): kredit ke penjualnya, `resellOwnerEmail` = `null`.
-- `value` / `count` / `deals[]` = deal yang kreditnya ke orang ini. `asSeller` = deal yang dijual orang ini tapi kreditnya ke AM Resell lain (catatan saja).
-- Tiap deal = format `newMrc.deals[]` + `sellerEmail`, `resellOwnerEmail`, `resellOwnerEmails`.
+- Customer tanpa layanan resell aktif (`resellOwnerEmployeeId` dan `resellOwnerEmail` = `null`): tidak dikreditkan ke siapa pun, hanya tercantum di `asSeller` penjualnya.
+- `resellOwnerEmployeeId` terisi tapi `resellOwnerEmail` `null` = pemilik resell tidak ada di data karyawan salesboard (mis. sudah keluar); kreditnya tetap ke ID itu, bukan ke penjual.
+- `value` / `count` / `deals[]` = deal yang kreditnya ke orang ini. `asSeller` = deal yang dijual orang ini tapi kreditnya bukan ke dia: ke AM Resell lain, atau tanpa pemilik (catatan saja).
+- Tiap deal = format `newMrc.deals[]` + `sellerEmail`, `resellOwnerEmployeeId`, `resellOwnerEmail`, `resellOwnerEmails`.
 - Hanya catatan: MRC cross-sell **tidak** mengubah `newMrc` siapa pun (penjual tetap mendapat New MRC-nya). Jangan dijumlahkan ke maupun dikurangkan dari `newMrc`.
 - Customer ID baru untuk perusahaan yang sama tidak terdeteksi (pencocokan hanya berdasarkan customer ID).
 - `team.members[].crossSell` berisi `value`, `count`, dan `asSeller` (`value`, `count`), tanpa daftar deal.
@@ -581,7 +582,7 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
             { "ai": 2024001, "invoiceNo": "900690001", "crmOpportunityId": null, "invoiceDate": "2026-10-10", "paidDate": "2026-10-12",
               "customerId": "0200000004", "customerName": "PT Contoh Cross Sell", "productName": "Nusa Web Hosting Starter Prepaid",
               "productLine": "internal", "type": "newCustomer", "status": "new", "mrc": 19000, "dpp": 228000, "termMonths": 12,
-              "sellerEmail": "am3@nusa.id", "resellOwnerEmail": "nama@nusa.id", "resellOwnerEmails": ["nama@nusa.id"] }
+              "sellerEmail": "am3@nusa.id", "resellOwnerEmployeeId": "0202016", "resellOwnerEmail": "nama@nusa.id", "resellOwnerEmails": ["nama@nusa.id"] }
           ],
           "asSeller": { "value": 0, "count": 0, "deals": [] }
         },

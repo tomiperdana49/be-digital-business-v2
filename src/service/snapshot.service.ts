@@ -463,7 +463,8 @@ export class SnapshotService implements ISnapshotService {
                 deal: {
                     ...this.toDeal(row, mrc, invoiceDates),
                     sellerEmail: row.sales_email ?? null,
-                    resellOwnerEmail: ownerEmails[0] ?? null,
+                    resellOwnerEmployeeId: ownerIds[0] ?? null,
+                    resellOwnerEmail: ownerIds.length ? (emails.get(ownerIds[0]) ?? null) : null,
                     resellOwnerEmails: ownerEmails
                 }
             };
@@ -472,9 +473,9 @@ export class SnapshotService implements ISnapshotService {
 
     /**
      * crossSell satu orang. Kredit cross-sell milik AM Resell utama di customer itu (bukan penjualnya);
-     * New MRC tetap milik penjual di newMrc. Kalau customer tidak punya layanan resell (cross-sell karena
-     * layanan internal lain), kredit jatuh ke penjual. asSeller = deal yang dijual orang ini tapi kreditnya
-     * ke AM Resell lain (catatan saja, tidak ikut value).
+     * New MRC tetap milik penjual di newMrc. Customer tanpa layanan resell aktif (resellOwnerEmail null)
+     * tidak dikreditkan ke siapa pun. asSeller = deal yang dijual orang ini tapi kreditnya bukan ke dia
+     * (ke AM Resell lain, atau tanpa pemilik) -- catatan saja, tidak ikut value.
      */
     crossSellFor(entries: CrossSellDealEntry[], employeeId: string): SalesCrossSell {
         const summarize = (list: CrossSellDealEntry[]) => ({
@@ -482,7 +483,7 @@ export class SnapshotService implements ISnapshotService {
             count: list.length,
             deals: list.map(e => e.deal)
         });
-        const creditedTo = (e: CrossSellDealEntry) => e.resellOwnerIds[0] ?? e.sellerId;
+        const creditedTo = (e: CrossSellDealEntry) => e.resellOwnerIds[0] ?? null;
         return {
             ...summarize(entries.filter(e => creditedTo(e) === employeeId)),
             asSeller: summarize(entries.filter(e => e.sellerId === employeeId && creditedTo(e) !== employeeId))

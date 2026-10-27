@@ -108,6 +108,7 @@ export interface SalesNewMrcSummary {
 
 export interface CrossSellDeal extends SalesDeal {
     sellerEmail: string | null;
+    resellOwnerEmployeeId: string | null;
     resellOwnerEmail: string | null;
     resellOwnerEmails: string[];
 }
