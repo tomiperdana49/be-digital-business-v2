@@ -12,6 +12,17 @@ const toDateString = (value: any): string | null => {
     return format(date, 'yyyy-MM-dd');
 };
 
+/**
+ * Manager yang boleh klaim komisi "Cust Lama" (recurring customer pribadinya) ke Manager Commission,
+ * beserta endDate periode terakhir yang masih berlaku. Manager lain (mis. Desy) tidak klaim sama sekali.
+ */
+const CUST_LAMA_CLAIM_UNTIL: Record<string, string> = {
+    '0202302': '2026-12-25' // Diva Wiera Buana, s/d periode Desember 2026
+};
+
+const claimsCustLama = (managerId: string, endDate: string): boolean =>
+    !!CUST_LAMA_CLAIM_UNTIL[managerId] && endDate <= CUST_LAMA_CLAIM_UNTIL[managerId];
+
 export class SnapshotService implements ISnapshotService {
     constructor(
         private readonly snapshotRepository: ISnapshotRepository,
@@ -787,6 +798,7 @@ export class SnapshotService implements ISnapshotService {
         // sama dengan tabel "Manager's own recurring invoices". Invoice new/upgrade/prorate/add milik manager
         // tidak dihitung. Dihitung PENUH (bukan dipotong 25%), lalu DITAMBAHKAN ke angka tim untuk jadi headline
         // "Manager Commission" & "Total Subscription" (total: tim + pribadi manager).
+        // Komisi Cust Lama hanya untuk manager & periode di CUST_LAMA_CLAIM_UNTIL; selain itu 0 (subscription tetap tampil).
         let managerCurrentCommission = 0;
         let managerPreviousCommission = 0;
         let managerCurrentSubscription = 0;
@@ -800,8 +812,8 @@ export class SnapshotService implements ISnapshotService {
                 this.aggregateSalesCommission(managerId, prevStartDate, prevEndDate)
             ]);
 
-            managerCurrentCommission = managerCurrent.commissionRecurring;
-            managerPreviousCommission = managerPrevious.commissionRecurring;
+            managerCurrentCommission = claimsCustLama(managerId, endDate) ? managerCurrent.commissionRecurring : 0;
+            managerPreviousCommission = claimsCustLama(managerId, prevEndDate) ? managerPrevious.commissionRecurring : 0;
             custLamaCommission = Calculate.trend(managerCurrentCommission, managerPreviousCommission);
 
             managerCurrentSubscription = managerCurrent.subscriptionRecurring;
