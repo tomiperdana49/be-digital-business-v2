@@ -1,4 +1,4 @@
-import { ISnapshotRepository, ISnapshotService, SalesChurnSummary, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
+import { CrossSellDealEntry, ISnapshotRepository, ISnapshotService, SalesChurnSummary, SalesCrossSell, SalesDeal, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
 import { Calculate } from '../helper/calculate';
 import { INisService } from '../interface/nis.interface';
 import { PeriodHelper } from '../helper/period';
@@ -357,39 +357,14 @@ export class SnapshotService implements ISnapshotService {
         const invoiceDates = new Map<number, any>(
             (await this.nisService.getInvoiceDatesByAi(Array.from(new Set(ais)))).map((r: any) => [Number(r.ai), r])
         );
-        const invoiceFields = (row: any) => ({
-            ai: row.ai,
-            invoiceNo: row.invoice_number != null ? String(row.invoice_number) : null,
-            crmOpportunityId: null,
-            invoiceDate: toDateString(invoiceDates.get(Number(row.ai))?.invoice_date),
-            paidDate: toDateString(row.paid_date),
-            customerId: row.customer_id ?? null,
-            customerName: row.customer_company ?? null,
-            productName: row.service_name ?? null,
-            productLine: row.service_type
-        });
-
-        const deals = data.dealRows.map(({ row, mrc }) => ({
-            ...invoiceFields(row),
-            type: row.status === 'new' ? 'newCustomer' as const : 'addon' as const,
-            status: row.status,
-            mrc: Math.round(mrc),
-            dpp: Number(row.subscription) || 0,
-            termMonths: Number(row.month_period) || 1
-        }));
-
-        // Cross-sell = deal internal new/termin dengan cross_sell_count > 0 (baris yang komisinya 15%)
-        const crossSellDeals = deals.filter((_, i) => {
-            const row = data.dealRows[i].row;
-            return row.service_type === 'internal' && ['new', 'termin'].includes(row.status) && Number(row.cross_sell_count) > 0;
-        });
+        const deals = data.dealRows.map(({ row, mrc }) => this.toDeal(row, mrc, invoiceDates));
 
         const renewals = data.renewalRows.map(row => {
             const dpp = Number(row.subscription) || 0;
             const termMonths = Number(row.month_period);
             const dates = invoiceDates.get(Number(row.ai));
             return {
-                ...invoiceFields(row),
+                ...this.invoiceFields(row, invoiceDates),
                 contractStart: toDateString(dates?.period_start_date),
                 contractEnd: toDateString(dates?.period_end_date),
                 termMonths,
@@ -405,11 +380,6 @@ export class SnapshotService implements ISnapshotService {
                 byType: { newCustomer, addon: value - newCustomer },
                 deals
             },
-            crossSell: {
-                value: crossSellDeals.reduce((sum, d) => sum + d.mrc, 0),
-                count: crossSellDeals.length,
-                deals: crossSellDeals
-            },
             renewals: {
                 count: renewals.length,
                 dppTotal: renewals.reduce((sum, r) => sum + r.dpp, 0),
@@ -421,6 +391,101 @@ export class SnapshotService implements ISnapshotService {
                 custLama: data.subscriptionRecurring,
                 includesPpn: false
             }
+        };
+    }
+
+    private invoiceFields(row: any, invoiceDates: Map<number, any>) {
+        return {
+            ai: row.ai,
+            invoiceNo: row.invoice_number != null ? String(row.invoice_number) : null,
+            crmOpportunityId: null,
+            invoiceDate: toDateString(invoiceDates.get(Number(row.ai))?.invoice_date),
+            paidDate: toDateString(row.paid_date),
+            customerId: row.customer_id ?? null,
+            customerName: row.customer_company ?? null,
+            productName: row.service_name ?? null,
+            productLine: row.service_type
+        };
+    }
+
+    private toDeal(row: any, mrc: number, invoiceDates: Map<number, any>): SalesDeal {
+        return {
+            ...this.invoiceFields(row, invoiceDates),
+            type: row.status === 'new' ? 'newCustomer' : 'addon',
+            status: row.status,
+            mrc: Math.round(mrc),
+            dpp: Number(row.subscription) || 0,
+            termMonths: Number(row.month_period) || 1
+        };
+    }
+
+    /**
+     * Deal cross-sell semua sales di periode, untuk API eksternal /commission/:email: invoice internal
+     * new/termin dengan cross_sell_count > 0 (baris komisi 15%) yang membawa MRC, dihitung sama dengan newMrc.deals.
+     * Tiap deal diberi AM penjual dan AM Resell pemilik layanan resell aktif di customer ID yang sama
+     * (dari NIS, SalesId saat ini; pemilik pertama = aktivasi resell paling awal). Dibagi per orang lewat crossSellFor().
+     */
+    async getCrossSellDeals(startDate: string, endDate: string): Promise<CrossSellDealEntry[]> {
+        const rows = (await this.snapshotRepository.getInternalCrossSellInvoice(startDate, endDate))
+            .map((row: any) => ({
+                row,
+                mrc: this.applyMrcOverride(row, row.status !== 'termin'
+                    ? Calculate.mrc(Number(row.subscription) || 0, Number(row.month_period) || 1, row.status) : 0)
+            }))
+            .filter(({ mrc }) => mrc !== 0);
+        if (rows.length === 0) return [];
+
+        const customerIds = Array.from(new Set(rows.map(({ row }) => row.customer_id).filter(Boolean))) as string[];
+        const [dateRows, ownerRows] = await Promise.all([
+            this.nisService.getInvoiceDatesByAi(rows.map(({ row }) => Number(row.ai))),
+            this.nisService.getResellOwnersByCustomerIds(customerIds)
+        ]);
+        const invoiceDates = new Map<number, any>(dateRows.map((r: any) => [Number(r.ai), r]));
+
+        // Urut aktivasi paling awal dulu, jadi pemilik pertama = AM Resell utama
+        const ownersByCustomer = new Map<string, string[]>();
+        for (const r of ownerRows) {
+            const list = ownersByCustomer.get(r.customer_id) ?? [];
+            if (!list.includes(r.sales_id)) list.push(r.sales_id);
+            ownersByCustomer.set(r.customer_id, list);
+        }
+        const emails = new Map<string, string>(
+            (await this.snapshotRepository.getEmployeeEmails(Array.from(new Set(ownerRows.map((r: any) => r.sales_id)))))
+                .map((r: any) => [r.employee_id, r.email])
+        );
+
+        return rows.map(({ row, mrc }) => {
+            const ownerIds = ownersByCustomer.get(row.customer_id) ?? [];
+            const ownerEmails = ownerIds.map(id => emails.get(id)).filter((e): e is string => !!e);
+            return {
+                sellerId: row.sales_id,
+                resellOwnerIds: ownerIds,
+                deal: {
+                    ...this.toDeal(row, mrc, invoiceDates),
+                    sellerEmail: row.sales_email ?? null,
+                    resellOwnerEmail: ownerEmails[0] ?? null,
+                    resellOwnerEmails: ownerEmails
+                }
+            };
+        });
+    }
+
+    /**
+     * crossSell satu orang. Kredit cross-sell milik AM Resell utama di customer itu (bukan penjualnya);
+     * New MRC tetap milik penjual di newMrc. Kalau customer tidak punya layanan resell (cross-sell karena
+     * layanan internal lain), kredit jatuh ke penjual. asSeller = deal yang dijual orang ini tapi kreditnya
+     * ke AM Resell lain (catatan saja, tidak ikut value).
+     */
+    crossSellFor(entries: CrossSellDealEntry[], employeeId: string): SalesCrossSell {
+        const summarize = (list: CrossSellDealEntry[]) => ({
+            value: list.reduce((sum, e) => sum + e.deal.mrc, 0),
+            count: list.length,
+            deals: list.map(e => e.deal)
+        });
+        const creditedTo = (e: CrossSellDealEntry) => e.resellOwnerIds[0] ?? e.sellerId;
+        return {
+            ...summarize(entries.filter(e => creditedTo(e) === employeeId)),
+            asSeller: summarize(entries.filter(e => e.sellerId === employeeId && creditedTo(e) !== employeeId))
         };
     }
 

@@ -8,6 +8,7 @@ export interface INisRepository {
     getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]>;
     getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]>;
     getInvoiceDatesByAi(ais: number[]): Promise<any[]>;
+    getResellOwnersByCustomerIds(customerIds: string[]): Promise<any[]>;
 }
 
 export interface INisService {
@@ -20,4 +21,5 @@ export interface INisService {
     getChurnListBySales(salesIds: string[], startDate: string, endDate: string): Promise<any[]>;
     getActiveMrcBySales(salesIds: string[], date: string): Promise<any[]>;
     getInvoiceDatesByAi(ais: number[]): Promise<any[]>;
+    getResellOwnersByCustomerIds(customerIds: string[]): Promise<any[]>;
 }

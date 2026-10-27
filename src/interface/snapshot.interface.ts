@@ -51,6 +51,8 @@ export interface ISnapshotRepository {
     getSnapshots(filters: SnapshotListFilters): Promise<any[]>;
     countSnapshots(filters: SnapshotListFilters): Promise<number>;
     getResellNewServiceIdsInRange(startDate: string, endDate: string): Promise<any[]>;
+    getInternalCrossSellInvoice(startDate: string, endDate: string): Promise<any[]>;
+    getEmployeeEmails(employeeIds: string[]): Promise<any[]>;
     getAccountManagers(): Promise<any[]>;
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
@@ -100,9 +102,27 @@ export interface SalesNewMrcSummary {
         byType: { newCustomer: number; addon: number };
         deals: SalesDeal[];
     };
-    crossSell: { value: number; count: number; deals: SalesDeal[] };
     renewals: { count: number; dppTotal: number; items: SalesRenewal[] };
     dpp: { total: number; new: number; custLama: number; includesPpn: false };
+}
+
+export interface CrossSellDeal extends SalesDeal {
+    sellerEmail: string | null;
+    resellOwnerEmail: string | null;
+    resellOwnerEmails: string[];
+}
+
+export interface CrossSellDealEntry {
+    sellerId: string;
+    resellOwnerIds: string[];
+    deal: CrossSellDeal;
+}
+
+export interface SalesCrossSell {
+    value: number;
+    count: number;
+    deals: CrossSellDeal[];
+    asSeller: { value: number; count: number; deals: CrossSellDeal[] };
 }
 
 export interface SalesChurnCustomer {
@@ -137,6 +157,8 @@ export interface ISnapshotService {
     getSalesTotalMrc(employeeId: string, startDate: string, endDate: string): Promise<number>;
     getSalesNewMrcSummary(employeeId: string, startDate: string, endDate: string): Promise<SalesNewMrcSummary>;
     getSalesChurnSummary(salesIds: string[], startDate: string, endDate: string): Promise<Map<string, SalesChurnSummary>>;
+    getCrossSellDeals(startDate: string, endDate: string): Promise<CrossSellDealEntry[]>;
+    crossSellFor(entries: CrossSellDealEntry[], employeeId: string): SalesCrossSell;
     deleteSnapshotByDateRangeAndType(startDate: string, endDate: string, serviceType: 'internal' | 'resell'): Promise<any>;
     insertSnapshot(data: SnapshotData): Promise<any>;
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;

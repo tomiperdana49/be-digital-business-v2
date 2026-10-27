@@ -531,11 +531,15 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 - `type`: `newCustomer` (status `new`) / `addon` (`upgrade`, `prorate`, `add`); `status` = status asli snapshot. `productLine`: `internal` / `resell`.
 - `dpp` = nilai invoice tanpa PPN, `termMonths` = `month_period` snapshot (resell prorate/add bisa pecahan). `invoiceDate` dari `CustomerInvoiceTemp.InvoiceDate` NIS.
 
-**`crossSell`** — deal cross-sell, definisi sama dengan aturan komisi 15%: invoice **internal** `new`/`termin` dengan `cross_sell_count > 0` (customer sudah punya layanan digital business lain selain domain):
-- Hanya catatan/informasi: deal cross-sell **sudah termasuk** di `newMrc.value` dan `newMrc.deals[]`. Jangan dijumlahkan ke maupun dikurangkan dari `newMrc`; total New MRC tetap `newMrc.value`.
-- `deals[]` = subset `newMrc.deals[]` (format sama), `value` = jumlah `deals[].mrc`, `count` = jumlah invoice. `termin` MRC-nya 0 sehingga tidak muncul.
-- Resell tidak pernah dihitung cross-sell (`cross_sell_count` resell selalu 0).
-- `team.members[].crossSell` berisi `value` dan `count` (tanpa daftar deal).
+**`crossSell`** — deal cross-sell, kreditnya untuk **AM Resell** pemilik customer. Deal = invoice **internal** `new`/`termin` dengan `cross_sell_count > 0` (aturan komisi 15%: customer sudah/bersamaan punya layanan digital business lain selain domain) yang membawa MRC:
+- Contoh: AM A menjual Nusawork (MRC 1.000.000) ke customer yang Google Workspace-nya dipegang AM B → `newMrc` AM A +1.000.000 (seperti biasa), `crossSell.value` AM B +1.000.000, dan deal itu muncul di `crossSell.asSeller` AM A.
+- AM Resell = `SalesId` layanan resell aktif (bukan NA, bukan domain) di customer ID yang sama di NIS saat ini; kalau lebih dari satu, kredit ke yang aktivasi resell-nya paling awal (`resellOwnerEmail`), semua tercantum di `resellOwnerEmails`.
+- Customer tanpa layanan resell (cross-sell karena layanan internal lain): kredit ke penjualnya, `resellOwnerEmail` = `null`.
+- `value` / `count` / `deals[]` = deal yang kreditnya ke orang ini. `asSeller` = deal yang dijual orang ini tapi kreditnya ke AM Resell lain (catatan saja).
+- Tiap deal = format `newMrc.deals[]` + `sellerEmail`, `resellOwnerEmail`, `resellOwnerEmails`.
+- Hanya catatan: MRC cross-sell **tidak** mengubah `newMrc` siapa pun (penjual tetap mendapat New MRC-nya). Jangan dijumlahkan ke maupun dikurangkan dari `newMrc`.
+- Customer ID baru untuk perusahaan yang sama tidak terdeteksi (pencocokan hanya berdasarkan customer ID).
+- `team.members[].crossSell` berisi `value`, `count`, dan `asSeller` (`value`, `count`), tanpa daftar deal.
 
 **`churn`** — layanan digital business milik sales yang unreg (`CustStatus = 'NA'`, `CustUnregDate` di periode), kriteria sama dengan kartu MRC churn dashboard:
 - `value` = kartu **MRC churn** (dibulatkan); `customerCount` = jumlah `customerId` berbeda; `customers[]` per layanan, `mrcLost` = `Subscription / bulan InvoiceType`, `effectiveDate` = `CustUnregDate`.
@@ -576,8 +580,10 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
           "deals": [
             { "ai": 2024001, "invoiceNo": "900690001", "crmOpportunityId": null, "invoiceDate": "2026-10-10", "paidDate": "2026-10-12",
               "customerId": "0200000004", "customerName": "PT Contoh Cross Sell", "productName": "Nusa Web Hosting Starter Prepaid",
-              "productLine": "internal", "type": "newCustomer", "status": "new", "mrc": 19000, "dpp": 228000, "termMonths": 12 }
-          ]
+              "productLine": "internal", "type": "newCustomer", "status": "new", "mrc": 19000, "dpp": 228000, "termMonths": 12,
+              "sellerEmail": "am3@nusa.id", "resellOwnerEmail": "nama@nusa.id", "resellOwnerEmails": ["nama@nusa.id"] }
+          ],
+          "asSeller": { "value": 0, "count": 0, "deals": [] }
         },
         "renewals": {
           "count": 1, "dppTotal": 2189000,
@@ -599,9 +605,9 @@ curl -H "X-API-Key: $CLIENT_API_KEY" "https://<host>/api/commission/nama@nusa.id
           "newMrc": 30160695,
           "includesOwn": false,
           "members": [
-            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5, "crossSell": { "value": 695000, "count": 1 },
+            { "email": "am1@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 15260041, "dealCount": 5, "crossSell": { "value": 695000, "count": 1, "asSeller": { "value": 0, "count": 0 } },
               "churn": { "value": 2201467, "customerCount": 3, "mrcActiveStart": 1128849092 } },
-            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12, "crossSell": { "value": 0, "count": 0 },
+            { "email": "am2@nusa.id", "name": "…", "targetNewMrc": 12000000, "newMrc": 9466291, "dealCount": 12, "crossSell": { "value": 0, "count": 0, "asSeller": { "value": 19000, "count": 1 } },
               "churn": { "value": 0, "customerCount": 0, "mrcActiveStart": 129890333 } }
           ]
         }

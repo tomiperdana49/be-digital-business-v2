@@ -349,6 +349,31 @@ export class NisRepository implements INisRepository {
         return rows as any[];
     }
 
+    /**
+     * Pemilik (SalesId) layanan resell per customer, kriteria sama dengan cross_tbl di getInternalByDateRange
+     * (digital_business, bukan NA, bukan domain). Untuk menandai AM Resell di deal cross-sell API client.
+     */
+    async getResellOwnersByCustomerIds(customerIds: string[]): Promise<any[]> {
+        const query = `
+            SELECT
+                cs.CustId AS customer_id,
+                cs.SalesId AS sales_id,
+                MIN(cs.CustActivationDate) AS first_activation_date
+            FROM CustomerServices cs
+            JOIN Services s ON s.ServiceId = cs.ServiceId
+            WHERE cs.CustId IN (?)
+              AND s.BusinessOperation = 'resell'
+              AND s.ServiceCategory = 'digital_business'
+              AND (cs.CustStatus IS NULL OR cs.CustStatus <> 'NA')
+              AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
+              AND cs.SalesId IS NOT NULL AND cs.SalesId <> ''
+            GROUP BY cs.CustId, cs.SalesId
+            ORDER BY first_activation_date
+        `;
+        const [rows] = await this.dbPool.query(query, [customerIds]);
+        return rows as any[];
+    }
+
     async getSurveyorByCustomerIds(customerIds: string[]): Promise<any[]> {
         const query = `
             SELECT c.CustId AS customer_id, c.Surveyor AS implementator_id

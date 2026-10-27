@@ -70,6 +70,30 @@ export class SnapshotRepository implements ISnapshotRepository {
         return rows as any[];
     }
 
+    /** Invoice internal new/termin yang terhitung cross-sell (komisi 15%) di periode, semua sales. */
+    async getInternalCrossSellInvoice(startDate: string, endDate: string): Promise<any[]> {
+        const query = `
+            SELECT s.*, e.email AS sales_email
+            FROM snapshots s
+            LEFT JOIN employees e ON e.employee_id = s.sales_id
+            WHERE s.service_type = 'internal'
+              AND s.status IN ('new', 'termin')
+              AND s.cross_sell_count > 0
+              AND s.paid_date BETWEEN ? AND ?
+            ORDER BY s.paid_date, s.ai
+        `;
+        const [rows] = await this.dbPool.query(query, [startDate, endDate]);
+        return rows as any[];
+    }
+
+    async getEmployeeEmails(employeeIds: string[]): Promise<any[]> {
+        if (employeeIds.length === 0) return [];
+        const [rows] = await this.dbPool.query(
+            `SELECT employee_id, email FROM employees WHERE employee_id IN (?)`, [employeeIds]
+        );
+        return rows as any[];
+    }
+
     async getAccountManagers(): Promise<any[]> {
         const query = `
             SELECT DISTINCT

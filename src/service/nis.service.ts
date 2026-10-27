@@ -39,4 +39,9 @@ export class NisService implements INisService {
     async getInvoiceDatesByAi(ais: number[]): Promise<any[]> {
         return this.nisRepository.getInvoiceDatesByAi(ais);
     }
+
+    async getResellOwnersByCustomerIds(customerIds: string[]): Promise<any[]> {
+        if (customerIds.length === 0) return [];
+        return this.nisRepository.getResellOwnersByCustomerIds(customerIds);
+    }
 }

@@ -216,9 +216,11 @@ export class CommissionController {
         ]);
 
         const months = await Promise.all(periods.map(async period => {
-            const [own, staff] = await Promise.all([
+            const [own, staff, crossSellDeals] = await Promise.all([
                 this.snapshotService.getSalesNewMrcSummary(employee.employee_id, period.startDate, period.endDate),
-                this.employeeService.getStaffForPeriod(employee.id, period.year, period.month)
+                this.employeeService.getStaffForPeriod(employee.id, period.year, period.month),
+                // Deal cross-sell seluruh sales di periode, dibagi per orang (kredit ke AM Resell)
+                this.snapshotService.getCrossSellDeals(period.startDate, period.endDate)
             ]);
             // Churn diambil sekali dari NIS untuk sales ini + semua staff-nya
             const churn = await this.snapshotService.getSalesChurnSummary(
@@ -228,13 +230,18 @@ export class CommissionController {
             const members = await Promise.all(staff.map(async (s: any) => {
                 const summary = await this.snapshotService.getSalesNewMrcSummary(s.employee_id, period.startDate, period.endDate);
                 const memberChurn = churn.get(s.employee_id)!;
+                const memberCrossSell = this.snapshotService.crossSellFor(crossSellDeals, s.employee_id);
                 return {
                     email: s.email,
                     name: s.name,
                     targetNewMrc: this.rewardService.resolveMonthlyTarget(targets, s, period.year, period.month),
                     newMrc: summary.newMrc.value,
                     dealCount: summary.newMrc.dealCount,
-                    crossSell: { value: summary.crossSell.value, count: summary.crossSell.count },
+                    crossSell: {
+                        value: memberCrossSell.value,
+                        count: memberCrossSell.count,
+                        asSeller: { value: memberCrossSell.asSeller.value, count: memberCrossSell.asSeller.count }
+                    },
                     churn: {
                         value: memberChurn.value,
                         customerCount: memberChurn.customerCount,
@@ -249,6 +256,7 @@ export class CommissionController {
                 // Sama seperti reward kuartal: yang punya staff tidak punya target New MRC pribadi
                 target: { newMrc: staff.length ? 0 : this.rewardService.resolveMonthlyTarget(targets, employee, period.year, period.month) },
                 ...own,
+                crossSell: this.snapshotService.crossSellFor(crossSellDeals, employee.employee_id),
                 churn: churn.get(employee.employee_id)!,
                 team: staff.length
                     ? { newMrc: members.reduce((sum, m) => sum + m.newMrc, 0), includesOwn: false, members }
