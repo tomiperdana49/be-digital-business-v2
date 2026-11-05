@@ -398,12 +398,12 @@ Method yang tersedia:
 - Algoritma **HS256**, secret dari `config.auth.jwtSecret`.
 
 ### 10.3 Middleware
-- **`authMiddleware`** ([`auth.middleware.ts`](src/middleware/auth.middleware.ts)) — verifikasi `Authorization: Bearer <token>`, set `c.set('user', payload)`. Dipakai di: `/auth/me`, `/auth/logout`, `/employee/:id`, `/employee/:id/hierarchy`.
+- **`authMiddleware`** ([`auth.middleware.ts`](src/middleware/auth.middleware.ts)) — verifikasi `Authorization: Bearer <token>`, set `c.set('user', payload)`. Dipakai di: `/auth/me`, `/auth/logout`, `/employee/*`, `/invoice/*`, `/commission/:id/*`, `/team/*`, `/target`, `/feedback`.
 - **`apiKeyMiddleware`** ([`api-key.middleware.ts`](src/middleware/api-key.middleware.ts)) — verifikasi header `X-API-Key` terhadap `CLIENT_API_KEYS` (perbandingan constant-time). Dipakai di `/commission/:email`.
 - **`hierarchyMiddleware`** — ⚠️ dead code, lihat §14.
 
 ### 10.4 Cakupan Proteksi Route
-Endpoint **komisi, invoice, dan team saat ini TIDAK memakai `authMiddleware`** (lihat [`api.ts`](src/route/api.ts) — komentar "Protected" ada tapi middleware tidak dipasang). Siapa pun yang tahu `employee_id` target bisa mengakses data komisi orang tersebut tanpa token. Perlu dikonfirmasi apakah ini disengaja (mis. dilindungi di layer gateway/FE lain) — lihat §14.
+Endpoint **komisi, invoice, dan team wajib login** (`authMiddleware`), tetapi **belum ada otorisasi per karyawan**: setiap karyawan yang login masih bisa membuka data karyawan lain lewat `employee_id`. Tanpa login hanya `/auth/login`, `/auth/google`, `/auth/refresh`, `/additional/period`, dan `/tv/mrc` (memakai `?key=`).
 
 ---
 
@@ -709,7 +709,7 @@ Tidak ada script `test`, `lint`, atau `typecheck` terdefinisi di `package.json` 
 Daftar temuan dari review kode (belum diperbaiki, murni observasi untuk referensi):
 
 1. **`hierarchyMiddleware` adalah dead code** ([`hierarchy.middleware.ts`](src/middleware/hierarchy.middleware.ts)) — tidak pernah di-import/dipasang di `api.ts` manapun. Selain itu isinya memanggil `new EmployeeService()` tanpa argumen, padahal constructor `EmployeeService` mewajibkan `employeeRepository: IEmployeeRepository` — jika suatu saat dipasang tanpa diperbaiki, akan **error runtime langsung** (`undefined.getEmployeeByEmployeeId is not a function`), sekaligus melanggar aturan DI murni di `gemini.md`.
-2. **Endpoint komisi/invoice/team tidak dilindungi `authMiddleware`** — siapa pun yang tahu `employee_id` bisa mengakses data komisi personal orang lain tanpa token. Perlu dikonfirmasi apakah ini disengaja (proteksi di layer lain) atau harus ditambahkan `hierarchyMiddleware` yang saat ini masih broken (poin 1).
+2. **Endpoint komisi/invoice/team belum punya otorisasi per karyawan** — sudah wajib login, tetapi karyawan yang login masih bisa mengakses data komisi personal orang lain lewat `employee_id`. Perlu pengecekan hierarki (`hierarchyMiddleware` saat ini masih broken, lihat poin 1).
 3. **`PeriodHelper.getStartAndEndDateForPreviousMonth()` secara literal identik** dengan `getStartAndEndDateForCurrentMonth()` — namanya menyiratkan seharusnya mundur satu periode, tapi implementasinya sama persis. Saat ini tidak dipanggil dari manapun (services menghitung "periode sebelumnya" secara manual sendiri), jadi tidak berdampak fungsional — tapi berpotensi jadi jebakan (trap) kalau dipakai di masa depan.
 4. **Formula margin resell membagi dengan `modal`, bukan `price`** ([`calculate.ts:96`](src/helper/calculate.ts)) — `margin = (markup / modal) * 100`. Definisi margin secara umum biasanya `markup / price` (margin atas harga jual) vs `markup / modal` (markup rate atas cost). Ini kemungkinan disengaja sesuai keputusan bisnis (lihat commit `21caf5c fix: change calculate (harga jual - harga modal / harga modal X 100%)`), tapi penamaan variabel `margin` bisa membingungkan karena secara istilah akuntansi umum itu lebih tepat disebut "markup percentage".
 5. **`POST /auth/dev`** login tanpa password sama sekali (hanya butuh `employeeId` valid) — pastikan endpoint ini dinonaktifkan/dibatasi IP di lingkungan production.
