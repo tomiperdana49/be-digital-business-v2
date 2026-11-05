@@ -12,6 +12,9 @@ CREATE TABLE employees (
     manager_id INT NULL,
     has_dashboard BOOLEAN NOT NULL DEFAULT false,
     is_admin BOOLEAN NOT NULL DEFAULT false,
+    -- Tanggal bergabung dan status kepegawaian dari Nusawork (join_date, status_join: Permanent / Probation).
+    join_date DATE NULL,
+    join_status VARCHAR(50) NULL,
     -- Diisi saat karyawan tidak lagi muncul di daftar aktif Nusawork (resign / pindah unit).
     -- NULL = aktif. Baris tidak pernah dihapus supaya riwayat komisi tetap bisa di-JOIN.
     deactivated_at DATETIME NULL
@@ -54,6 +57,7 @@ CREATE TABLE snapshots (
 -- ALTER TABLE snapshots ADD COLUMN mrc_override DECIMAL(15, 2) NULL;
 -- ALTER TABLE snapshots ADD COLUMN implementator_period_date DATE NULL;
 -- ALTER TABLE employees ADD COLUMN deactivated_at DATETIME NULL;
+-- ALTER TABLE employees ADD COLUMN join_date DATE NULL AFTER is_admin, ADD COLUMN join_status VARCHAR(50) NULL AFTER join_date;
 
 -- Mapping manager -> staff per periode (year, month).
 -- employee_id & manager_id merujuk ke employees.id (internal numeric id).

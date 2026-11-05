@@ -6,6 +6,7 @@ import { CommissionController } from '../controller/commission.controller';
 import { AdditionalController } from '../controller/additional.controller';
 import { TargetController } from '../controller/target.controller';
 import { FeedbackController } from '../controller/feedback.controller';
+import { TvController } from '../controller/tv.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { adminMiddleware } from '../middleware/admin.middleware';
 import { apiKeyMiddleware } from '../middleware/api-key.middleware';
@@ -46,6 +47,7 @@ const commissionController = new CommissionController(snapshotService, employeeS
 const additionalController = new AdditionalController();
 const targetController = new TargetController(targetRepository, employeeService);
 const feedbackController = new FeedbackController(feedbackRepository, employeeService);
+const tvController = new TvController(snapshotService, employeeService, rewardService);
 
 // Public Auth Routes
 api.post('/auth/login', (c) => authController.login(c));
@@ -95,6 +97,9 @@ api.post('/feedback', authMiddleware, (c) => feedbackController.create(c));
 
 // Client Routes (server-to-server, autentikasi lewat header X-API-Key)
 api.get('/commission/:email', apiKeyMiddleware, (c) => commissionController.clientSalesCommission(c));
+
+// TV Routes (tanpa login, autentikasi lewat ?key=)
+api.get('/tv/mrc', (c) => tvController.mrc(c));
 
 // Additional Routes
 api.get('/additional/period', (c) => additionalController.getPeriod(c));

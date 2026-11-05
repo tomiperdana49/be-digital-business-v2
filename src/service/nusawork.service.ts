@@ -67,6 +67,8 @@ export class NusaworkService implements INusaworkService {
         return accountManager.map((emp: any) => ({
             userId: emp.user_id,
             employeeId: emp.employee_id,
+            joinDate: emp.join_date ?? null,
+            joinStatus: emp.status_join ?? null,
             name: emp.full_name,
             email: emp.email,
             photoProfile: emp.photo_profile,
@@ -93,6 +95,8 @@ export class NusaworkService implements INusaworkService {
         return accountManager.map((emp: any) => ({
             userId: emp.user_id,
             employeeId: emp.employee_id,
+            joinDate: emp.join_date ?? null,
+            joinStatus: emp.status_join ?? null,
             name: emp.full_name,
             email: emp.email,
             photoProfile: emp.photo_profile,
@@ -140,6 +144,8 @@ export class NusaworkService implements INusaworkService {
         return accountManager.map((emp: any) => ({
             userId: emp.user_id,
             employeeId: emp.employee_id,
+            joinDate: emp.join_date ?? null,
+            joinStatus: emp.status_join ?? null,
             name: emp.full_name,
             email: emp.email,
             photoProfile: emp.photo_profile,

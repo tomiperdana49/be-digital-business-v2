@@ -1,6 +1,8 @@
 export interface Employee {
     userId: number | string;
     employeeId: string;
+    joinDate: string | null;
+    joinStatus: string | null;
     name: string;
     email: string;
     photoProfile: string | null;

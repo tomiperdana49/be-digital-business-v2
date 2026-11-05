@@ -20,9 +20,11 @@ export class EmployeeRepository implements IEmployeeRepository {
                 branch,
                 manager_id,
                 has_dashboard,
-                is_admin
+                is_admin,
+                join_date,
+                join_status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 employee_id = VALUES(employee_id),
                 name = VALUES(name),
@@ -36,6 +38,8 @@ export class EmployeeRepository implements IEmployeeRepository {
                 manager_id = VALUES(manager_id),
                 has_dashboard = VALUES(has_dashboard),
                 is_admin = VALUES(is_admin),
+                join_date = VALUES(join_date),
+                join_status = VALUES(join_status),
                 deactivated_at = NULL
         `;
 
@@ -52,7 +56,9 @@ export class EmployeeRepository implements IEmployeeRepository {
             data.branch,
             data.managerId ?? null,
             data.hasDashboard ?? false,
-            data.isAdmin ?? false
+            data.isAdmin ?? false,
+            data.joinDate ?? null,
+            data.joinStatus ?? null
         ]);
 
         return rows;

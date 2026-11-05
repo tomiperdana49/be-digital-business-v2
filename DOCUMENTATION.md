@@ -136,6 +136,7 @@ gemini.md        # Panduan konteks proyek untuk AI assistant
 | `FEEDBACK_GOOGLE_CHAT_WEBHOOK_URL` | Incoming webhook Google Chat; setiap feedback yang tersimpan di sheet dikirim juga ke space ini. Gagal kirim hanya di-log, feedback tetap tersimpan. Kosong = tanpa notifikasi | `''` |
 | `FEEDBACK_SHEET_URL` | Link spreadsheet feedback, ditampilkan sebagai tombol di notifikasi Google Chat (opsional) | `''` |
 | `CLIENT_API_KEYS` | API key untuk client eksternal (`/commission/:email`), pisahkan dengan koma kalau lebih dari satu (untuk rotasi). Kosong = endpoint client membalas `503` | `''` |
+| `TV_DISPLAY_KEY` | Key layar TV tanpa login (FE: `/tv?key=...`); kosong = `/tv/mrc` selalu `404` | `''` |
 
 Semua nilai ini diekspor terstruktur lewat [`src/config/app.ts`](src/config/app.ts) sebagai object `config`. **Jangan** memanggil `process.env` di file lain.
 
@@ -159,6 +160,7 @@ Skema lengkap ada di [`table.sql`](table.sql).
 | `job_position`, `organization_name`, `job_level`, `branch` | VARCHAR | Data organisasi dari Nusawork |
 | `manager_id` | INT NULL | FK ke `employees.id` (self-referencing, dipakai recursive CTE hierarchy) |
 | `has_dashboard` | BOOLEAN | Apakah karyawan ini berhak akses dashboard (sales, implementator, admin tertentu) |
+| `join_date`, `join_status` | DATE NULL, VARCHAR NULL | Tanggal bergabung dan status kepegawaian dari Nusawork (`Permanent` / `Probation`); dipakai layar TV |
 
 **`snapshots`** — tabel hasil sinkronisasi dari NIS, sumber utama semua perhitungan komisi.
 
@@ -504,6 +506,17 @@ Query param opsional untuk semua: `?month=&year=` (default: periode berjalan, cu
 ```
 
 `/commission/:id/manager*` dan `/team/:id/manager*` mengembalikan `404 "manager not found"` jika `:id` tidak ditemukan di tabel `employees` sebagai manager (dicari via `getManagerById` → butuh `manager[0].id` untuk query staff).
+
+### TV (tanpa login, query `?key=`)
+
+| Method | Path | Query | Deskripsi |
+|---|---|---|---|
+| GET | `/tv/mrc` | `?key=<TV_DISPLAY_KEY>` | Pemenang periode lalu dan ranking periode berjalan untuk layar TV: `rows` (Account Manager) dan `managers` (Sales Manager) |
+
+- Key salah atau `TV_DISPLAY_KEY` kosong → `404`. Hasil di-cache 2 menit.
+- Hanya mengirim nama, foto, cabang, persen pencapaian, dan flag AM baru (bergabung < 6 bulan). Nominal MRC, target, dan ID tidak dikirim.
+- Urutan: persen pencapaian tertinggi, seri → MRC terbesar, lalu nama. Tanpa target dan AM `Probation` (persen `null`) di paling bawah.
+- SM: MRC dan target = jumlah anggota tim periode itu (tanpa penjualan pribadi SM); SM tanpa tim tidak ikut.
 
 ### Client (server-to-server, header `X-API-Key`)
 

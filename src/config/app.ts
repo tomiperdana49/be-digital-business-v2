@@ -44,5 +44,9 @@ export const config = {
   client: {
     // API key untuk client eksternal (/api/commission/:email), dipisah koma kalau lebih dari satu
     apiKeys: (process.env.CLIENT_API_KEYS || '').split(',').map(key => key.trim()).filter(Boolean),
+  },
+  tv: {
+    // Key layar TV tanpa login (FE: /tv?key=...); kosong = endpoint /api/tv/mrc mati (404)
+    displayKey: process.env.TV_DISPLAY_KEY || '',
   }
 };
