@@ -27,7 +27,11 @@ type TvMrcRow = {
 /** rows = Account Manager, managers = Sales Manager. */
 type TvMrcPeriod = Period & { rows: TvMrcRow[]; managers: TvMrcRow[] };
 
-type TvMrcData = { previous: TvMrcPeriod; current: TvMrcPeriod; generatedAt: string };
+/**
+ * generatedTime (jam WIB HH:mm) dan daysLeft (sisa hari periode berjalan, sampai akhir endDate WIB)
+ * dihitung di server, karena timezone di perangkat TV tidak bisa diandalkan.
+ */
+type TvMrcData = { previous: TvMrcPeriod; current: TvMrcPeriod; generatedAt: string; generatedTime: string; daysLeft: number };
 
 const CACHE_MS = 2 * 60 * 1000;
 const NEW_JOINER_MONTHS = 6;
@@ -86,10 +90,13 @@ export class TvController {
             this.rankSalesManagers(salesManagers.filter(active), current, targets)
         ]);
 
+        const generatedAt = new Date();
         return {
             previous: { ...previous, rows: previousRows, managers: previousManagers },
             current: { ...current, rows: currentRows, managers: currentManagers },
-            generatedAt: new Date().toISOString()
+            generatedAt: generatedAt.toISOString(),
+            generatedTime: generatedAt.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }),
+            daysLeft: Math.ceil((new Date(`${current.endDate}T23:59:59+07:00`).getTime() - generatedAt.getTime()) / 86_400_000)
         };
     }
 
