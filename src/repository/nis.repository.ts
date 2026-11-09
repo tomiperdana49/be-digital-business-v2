@@ -32,6 +32,39 @@ const BATCH_PAID_DATE_JOIN = `
 // Periode pakai trx_date; kalau kosong, pakai tanggal pelunasan dari batch
 const PAID_DATE_IN_RANGE = `(nciit.trx_date BETWEEN ? AND ? OR (nciit.trx_date IS NULL AND batch_paid.batch_date BETWEEN ? AND ?))`;
 
+/**
+ * Layanan (alias `cs`) pernah punya minimal satu item invoice yang lunas, kriteria lunas sama dengan sync invoice:
+ * ada trx_date, atau masuk batch yang berisi penerimaan uang (RA02) / PPh 23. Dipakai untuk churn supaya layanan
+ * yang di-unreg sebelum pernah bayar (belum onboarding, belum ada klaim komisi) atau yang gratis (FR) tidak dihitung churn.
+ * Ditulis sebagai scalar subquery (bukan EXISTS) supaya MariaDB mengevaluasinya per layanan; EXISTS diubah jadi
+ * semijoin yang me-materialize seluruh NewCustomerInvoiceInternetCounter (~8 detik untuk query sales).
+ * Hanya berlaku untuk unreg mulai CHURN_EVER_PAID_FROM (awal periode Nov 2026) supaya angka churn periode yang
+ * sudah lewat tidak berubah.
+ */
+const CHURN_EVER_PAID_FROM = '2026-10-26';
+const SERVICE_EVER_PAID = `(cs.CustUnregDate < '${CHURN_EVER_PAID_FROM}' OR (
+                SELECT 1
+                FROM CustomerInvoiceTemp paid_cit
+                JOIN NewCustomerInvoice paid_nci
+                    ON paid_nci.Id = paid_cit.InvoiceNum AND paid_nci.No = paid_cit.Urut
+                JOIN NewCustomerInvoiceInternetCounter paid_n
+                    ON paid_n.AI = paid_nci.AI
+                WHERE paid_cit.CustServId = cs.CustServId
+                    AND (
+                        paid_n.trx_date IS NOT NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM NewCustomerInvoiceBatch paid_b
+                            JOIN NewCustomerInvoiceBatch src_b ON src_b.batchNo = paid_b.batchNo
+                            JOIN NewCustomerInvoice src ON src.AI = src_b.AI
+                            WHERE paid_b.AI = paid_n.AI
+                                AND src_b.total > 0
+                                AND src.Type IN ('RA02', 'pph23')
+                        )
+                    )
+                LIMIT 1
+            ) = 1)`;
+
 export class NisRepository implements INisRepository {
     constructor(private readonly dbPool: Pool) {}
 
@@ -223,7 +256,8 @@ export class NisRepository implements INisRepository {
             WHERE cs.ServiceId IN ('NWBUS', 'NWADV')
             AND c.Surveyor = ?
             AND cs.CustStatus = 'NA'
-            AND cs.CustUnregDate BETWEEN ? AND ?;
+            AND cs.CustUnregDate BETWEEN ? AND ?
+            AND ${SERVICE_EVER_PAID};
         `;
         const [rows] = await this.dbPool.query(query, [implementatorId, startDate, endDate]);
         const data = rows as any[];
@@ -247,6 +281,7 @@ export class NisRepository implements INisRepository {
             AND c.Surveyor = ?
             AND cs.CustStatus = 'NA'
             AND cs.CustUnregDate BETWEEN ? AND ?
+            AND ${SERVICE_EVER_PAID}
             ORDER BY cs.CustUnregDate DESC;
         `;
         const [rows] = await this.dbPool.query(query, [implementatorId, startDate, endDate]);
@@ -268,7 +303,8 @@ export class NisRepository implements INisRepository {
             AND s.ServiceCategory = 'digital_business'
             AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
             AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
-            AND LOWER(s.ServiceType) NOT LIKE '%license%';
+            AND LOWER(s.ServiceType) NOT LIKE '%license%'
+            AND ${SERVICE_EVER_PAID};
         `;
         const [rows] = await this.dbPool.query(query, [salesIds, startDate, endDate]);
         const data = rows as any[];
@@ -302,6 +338,7 @@ export class NisRepository implements INisRepository {
             AND (s.ServiceGroup IS NULL OR s.ServiceGroup <> 'DO')
             AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
             AND LOWER(s.ServiceType) NOT LIKE '%license%'
+            AND ${SERVICE_EVER_PAID}
             ORDER BY cs.CustUnregDate, cs.CustServId;
         `;
         const [rows] = await this.dbPool.query(query, [salesIds, startDate, endDate]);
