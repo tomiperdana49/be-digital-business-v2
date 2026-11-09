@@ -176,6 +176,7 @@ export class NisRepository implements INisRepository {
                 cs.CustServId AS customer_service_id,
                 c.CustCompany AS customer_company,
                 cs.CustActivationDate AS activation_date,
+                cs.Subscription AS full_subscription,
                 s.ServiceGroup AS service_group_id,
                 s.ServiceId AS service_id,
                 s.ServiceType AS service_name,

@@ -4,13 +4,42 @@ import { SnapshotService } from '../service/snapshot.service';
 import { SnapshotRepository } from '../repository/snapshot.repository';
 import { dashboardPool, nisPool } from '../config/database';
 import { PeriodHelper } from '../helper/period';
-import { differenceInDays, getDaysInMonth, endOfMonth, addDays, startOfDay } from 'date-fns';
+import { differenceInDays, getDaysInMonth, endOfMonth, addDays, startOfDay, format } from 'date-fns';
 
 const nisRepository = new NisRepository(nisPool);
 const nisService = new NisService(nisRepository);
 const snapshotRepository = new SnapshotRepository(dashboardPool);
 const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const periodHelper = new PeriodHelper();
+
+// Aturan prorate tanpa tanda dari NIS hanya untuk pembayaran mulai periode Nov 2026, supaya periode lama tidak berubah.
+const UNFLAGGED_PRORATE_FROM = '2026-10-26';
+
+/**
+ * Invoice bulanan pertama yang sebenarnya prorate (aktivasi di tengah bulan) tapi NIS tidak menandainya:
+ * is_prorata = 0 dan InvoicePeriodStart/End kosong, sehingga dianggap 1 bulan penuh -> MRC kecil dan modal
+ * tidak diprorata (margin bisa minus). Contoh: AI 2047307, aktivasi 9 Nov, tagihan 22/30 x subscription.
+ * Dikenali kalau nilai invoice ~= subscription penuh x (sisa hari sejak aktivasi / hari dalam bulan);
+ * periodenya dijadikan tanggal aktivasi s/d akhir bulan itu.
+ */
+function unflaggedProrateDates(row: any): { start: Date; end: Date } | null {
+    if (!row.activation_date || Number(row.month) !== 1) return null;
+    if (!(Number(row.new_subscription) > 0) || row.is_prorate !== 0 || row.is_upgrade !== 0 || row.is_add_account === 1) return null;
+    if (!row.paid_date || format(new Date(row.paid_date), 'yyyy-MM-dd') < UNFLAGGED_PRORATE_FROM) return null;
+
+    const activation = startOfDay(new Date(row.activation_date));
+    if (activation.getDate() === 1) return null;
+    // Invoice harus untuk bulan aktivasi (AwalPeriode = AkhirPeriode = yyyymm aktivasi)
+    const activationPeriod = Number(format(activation, 'yyyyMM'));
+    if (Number(row.period_start) !== activationPeriod || Number(row.period_end) !== activationPeriod) return null;
+
+    const monthEnd = startOfDay(endOfMonth(activation));
+    const ratio = (differenceInDays(monthEnd, activation) + 1) / getDaysInMonth(activation);
+    const expected = Number(row.full_subscription) * ratio;
+    if (!(expected > 0) || Math.abs(Number(row.subscription) - expected) > expected * 0.01) return null;
+
+    return { start: activation, end: monthEnd };
+}
 
 async function syncResellInvoices(startDate: string, endDate: string) {
     console.log('[SYNC] Starting resell invoice synchronization from NIS...');
@@ -56,9 +85,13 @@ async function syncResellInvoices(startDate: string, endDate: string) {
                 let finalModal = Number(row.modal) || 0;
                 let finalMonthPeriod = row.month;
 
-                if (row.period_start_date && row.period_end_date) {
-                    const periodStartDate = startOfDay(new Date(row.period_start_date));
-                    const periodEndDate = startOfDay(new Date(row.period_end_date));
+                const periodDates = (row.period_start_date && row.period_end_date)
+                    ? { start: row.period_start_date, end: row.period_end_date }
+                    : unflaggedProrateDates(row);
+
+                if (periodDates) {
+                    const periodStartDate = startOfDay(new Date(periodDates.start));
+                    const periodEndDate = startOfDay(new Date(periodDates.end));
                     const baseModal = Number(row.modal) || 0;
 
                     // Cek apakah periode tepat kelipatan bulan
