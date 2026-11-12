@@ -206,7 +206,39 @@ export class NisRepository implements INisRepository {
                             AND n2.AI < nciit.AI
                             AND n2.is_prorata = 0
                     )
-                ) AS is_first_full_invoice
+                ) AS is_first_full_invoice,
+                -- Baris invoice baru yang diterbitkan ulang: NIS kadang membuat ulang baris invoice (Urut lain, nomor
+                -- invoice sama) dan baris yang dibayar kehilangan tanda new_subscription, sementara baris lamanya
+                -- (bertanda new_subscription, tidak pernah dibayar) tetap ada. Contoh: invoice 900702017 Lesindo,
+                -- AI 2048654 (new, belum bayar) -> AI 2049501 (dibayar, new_subscription 0).
+                -- Syarat tambahan: layanan belum pernah punya item invoice yang dibayar sebelumnya.
+                (nciit.is_prorata = 0 AND nciit.is_upgrade = 0 AND nciit.new_subscription = 0
+                    AND (
+                        SELECT 1
+                        FROM CustomerInvoiceTemp re_cit
+                        JOIN NewCustomerInvoice re_nci ON re_nci.Id = re_cit.InvoiceNum AND re_nci.No = re_cit.Urut
+                        JOIN NewCustomerInvoiceInternetCounter re_n ON re_n.AI = re_nci.AI
+                        WHERE re_cit.InvoiceNum = cit.InvoiceNum
+                            AND re_cit.CustServId = cit.CustServId
+                            AND re_cit.Urut <> cit.Urut
+                            AND re_n.AI < nciit.AI
+                            AND re_n.new_subscription > 0
+                            AND re_n.trx_date IS NULL
+                            AND NOT EXISTS (SELECT 1 FROM NewCustomerInvoiceBatch re_b WHERE re_b.AI = re_n.AI)
+                        LIMIT 1
+                    ) IS NOT NULL
+                    AND (
+                        SELECT 1
+                        FROM CustomerInvoiceTemp pd_cit
+                        JOIN NewCustomerInvoice pd_nci ON pd_nci.Id = pd_cit.InvoiceNum AND pd_nci.No = pd_cit.Urut
+                        JOIN NewCustomerInvoiceInternetCounter pd_n ON pd_n.AI = pd_nci.AI
+                        WHERE pd_cit.CustServId = cit.CustServId
+                            AND pd_n.AI < nciit.AI
+                            AND (pd_n.trx_date IS NOT NULL
+                                OR EXISTS (SELECT 1 FROM NewCustomerInvoiceBatch pd_b WHERE pd_b.AI = pd_n.AI))
+                        LIMIT 1
+                    ) IS NULL
+                ) AS is_reissued_new
             FROM NewCustomerInvoiceInternetCounter nciit
             LEFT JOIN NewCustomerInvoice nci 
                 ON nciit.AI = nci.AI

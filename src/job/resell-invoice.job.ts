@@ -14,6 +14,8 @@ const periodHelper = new PeriodHelper();
 
 // Aturan prorate tanpa tanda dari NIS hanya untuk pembayaran mulai periode Nov 2026, supaya periode lama tidak berubah.
 const UNFLAGGED_PRORATE_FROM = '2026-10-26';
+// Invoice new yang diterbitkan ulang (is_reissued_new) hanya dikoreksi mulai periode Nov 2026, supaya periode lama tidak berubah.
+const REISSUED_NEW_FROM = '2026-10-26';
 
 /**
  * Invoice bulanan pertama yang sebenarnya prorate (aktivasi di tengah bulan) tapi NIS tidak menandainya:
@@ -79,6 +81,11 @@ async function syncResellInvoices(startDate: string, endDate: string) {
                 // (MRC di sini; prorate-nya jadi MRC 0 lewat aturan dedup resellMrc)
                 if (status === 'recurring' && Number(row.is_first_full_invoice) === 1
                     && initialProrateServiceIds.has(row.customer_service_id)) {
+                    status = 'new';
+                }
+                // Baris invoice baru yang diterbitkan ulang NIS tanpa tanda new_subscription (lihat is_reissued_new)
+                if (status === 'recurring' && Number(row.is_reissued_new) === 1 && row.paid_date
+                    && format(new Date(row.paid_date), 'yyyy-MM-dd') >= REISSUED_NEW_FROM) {
                     status = 'new';
                 }
 
