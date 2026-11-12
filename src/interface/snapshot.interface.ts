@@ -151,6 +151,7 @@ export interface ISnapshotService {
     getResellInvoiceDetail(employeeId: string, startDate: string, endDate: string): Promise<any>;
     getImplementatorInvoiceDetail(implementatorId: string, startDate: string, endDate: string): Promise<any>;
     getImplementatorChurnList(implementatorId: string, startDate: string, endDate: string): Promise<any>;
+    getSalesChurnList(salesIds: string[], startDate: string, endDate: string): Promise<any>;
     getImplementatorCommissionSummary(implementatorId: string, startDate: string, endDate: string): Promise<any>;
     getImplementatorCommissionYearlySummary(implementatorId: string, year: number): Promise<any[]>;
     getSalesCommissionSummary(employeeId: string, startDate: string, endDate: string): Promise<any>;

@@ -356,7 +356,9 @@ export class NisRepository implements INisRepository {
                 cs.CustServId AS customer_service_id,
                 c.CustId AS customer_id,
                 c.CustCompany AS customer_company,
+                cs.ServiceId AS service_id,
                 s.ServiceType AS service_name,
+                cs.CustActivationDate AS activation_date,
                 cs.CustUnregDate AS unreg_date,
                 NULLIF(TRIM(cs.CustCloseReason), '') AS close_reason,
                 cs.Subscription / COALESCE(NULLIF(itm.Month, 0), 1) AS mrc

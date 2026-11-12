@@ -277,6 +277,32 @@ export class CommissionController {
         }, "sales commission retrieved successfully");
     }
 
+    /**
+     * Daftar churn tim manager di periode ini: anggota tim sama dengan kartu MRC Churn manager
+     * (getStaffForPeriod, tanpa invoice pribadi manager), jadi jumlah `mrc` = angka MRC Churn di sana.
+     */
+    async managerTeamChurn(c: Context) {
+        const { month: monthQuery, year: yearQuery } = c.req.query();
+        const managerId = c.req.param('id');
+
+        if (!managerId) {
+            return ApiResponse.error(c, "id is required", 400);
+        }
+
+        const manager = await this.employeeService.getManagerById(managerId);
+        if (!manager.length) {
+            return ApiResponse.error(c, "manager not found", 404);
+        }
+
+        const period = this.periodHelper.getPeriodFromQuery(monthQuery, yearQuery);
+        const staff = await this.employeeService.getStaffForPeriod(manager[0].id, period.year, period.month);
+        const names = new Map<string, string>(staff.map((s: any) => [s.employee_id, s.name]));
+
+        const rows = await this.snapshotService.getSalesChurnList(Array.from(names.keys()), period.startDate, period.endDate);
+        const data = rows.map((row: any) => ({ ...row, salesName: names.get(row.salesId) ?? row.salesId }));
+        return ApiResponse.success(c, data, "manager team churn retrieved successfully");
+    }
+
     private async getManagerCommissionSummary(manager: any, period: { year: number; month: number; startDate: string; endDate: string }) {
         const staff = await this.employeeService.getStaffForPeriod(manager.id, period.year, period.month);
         // Manager Commission = 25% dari komisi TIM saja. Komisi pribadi manager sebagai sales

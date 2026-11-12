@@ -124,4 +124,17 @@ export class InvoiceController {
         return ApiResponse.success(c, data, "Implementator churn list retrieved successfully");
     }
 
+    async salesChurn(c: Context) {
+        const { month: monthQuery, year: yearQuery } = c.req.query();
+        const id = c.req.param('id');
+
+        if (!id) {
+            return ApiResponse.error(c, "id is required", 400);
+        }
+
+        const { startDate, endDate } = this.periodHelper.getPeriodFromQuery(monthQuery, yearQuery);
+        const data = await this.snapshotService.getSalesChurnList([id], startDate, endDate);
+        return ApiResponse.success(c, data, "Sales churn list retrieved successfully");
+    }
+
 }

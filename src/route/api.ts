@@ -79,6 +79,7 @@ api.get('/invoice/:id/internal', authMiddleware, employeeAccess, (c) => invoiceC
 api.get('/invoice/:id/implementator', authMiddleware, employeeAccess, (c) => invoiceController.implementatorInvoice(c));
 api.get('/invoice/:id/implementator/churn', authMiddleware, employeeAccess, (c) => invoiceController.implementatorChurn(c));
 api.get('/invoice/:id/resell', authMiddleware, employeeAccess, (c) => invoiceController.resellInvoice(c));
+api.get('/invoice/:id/sales/churn', authMiddleware, employeeAccess, (c) => invoiceController.salesChurn(c));
 
 // Protected Commission Routes
 api.get('/commission/:id/implementator', authMiddleware, employeeAccess, (c) => commissionController.implementatorCommission(c));
@@ -91,6 +92,7 @@ api.get('/commission/:id/manager/yearly', authMiddleware, employeeAccess, (c) =>
 // Protected Team Routes
 api.get('/team/:id/manager', authMiddleware, employeeAccess, (c) => commissionController.managerTeam(c));
 api.get('/team/:id/manager/yearly', authMiddleware, employeeAccess, (c) => commissionController.managerTeamYearly(c));
+api.get('/team/:id/manager/churn', authMiddleware, employeeAccess, (c) => commissionController.managerTeamChurn(c));
 
 // Admin Target Routes (target New MRC per branch & organisasi untuk reward kuartal)
 api.get('/target', authMiddleware, adminMiddleware, (c) => targetController.list(c));

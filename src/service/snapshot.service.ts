@@ -204,6 +204,27 @@ export class SnapshotService implements ISnapshotService {
         }));
     }
 
+    /**
+     * Daftar layanan churn milik sales di periode ini; kriteria sama dengan kartu MRC Churn
+     * (getChurnMrcBySales), jadi jumlah `mrc` = angka MRC Churn di dashboard sales.
+     */
+    async getSalesChurnList(salesIds: string[], startDate: string, endDate: string): Promise<any> {
+        const rows = await this.nisService.getChurnListBySales(salesIds, startDate, endDate);
+
+        return rows.map(row => ({
+            salesId: row.sales_id,
+            customerServiceId: row.customer_service_id,
+            customerId: row.customer_id,
+            customerCompany: row.customer_company,
+            serviceId: row.service_id,
+            serviceName: row.service_name,
+            activationDate: row.activation_date,
+            unregDate: row.unreg_date,
+            closeReason: row.close_reason ?? null,
+            mrc: Number(row.mrc) || 0
+        }));
+    }
+
     async getImplementatorCommissionSummary(implementatorId: string, startDate: string, endDate: string): Promise<any> {
         // Periode bulan lalu: tanggal 26 dua bulan lalu s/d 25 bulan lalu
         const { startDate: prevStartDate, endDate: prevEndDate } = this.previousPeriod(endDate);
