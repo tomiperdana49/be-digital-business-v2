@@ -87,4 +87,8 @@ export class EmployeeService implements IEmployeeService {
 
         return await this.employeeRepository.getHierarchy(employeeId, activeFrom);
     }
+
+    async hasManagedInAnyPeriod(managerEmployeeId: string, employeeId: string): Promise<boolean> {
+        return await this.employeeRepository.hasManagedInAnyPeriod(managerEmployeeId, employeeId);
+    }
 }

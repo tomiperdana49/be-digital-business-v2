@@ -10,6 +10,7 @@ import { TvController } from '../controller/tv.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { adminMiddleware } from '../middleware/admin.middleware';
 import { apiKeyMiddleware } from '../middleware/api-key.middleware';
+import { hierarchyMiddleware } from '../middleware/hierarchy.middleware';
 import { SnapshotRepository } from '../repository/snapshot.repository';
 import { SnapshotService } from '../service/snapshot.service';
 import { EmployeeRepository } from '../repository/employee.repository';
@@ -49,6 +50,9 @@ const targetController = new TargetController(targetRepository, employeeService)
 const feedbackController = new FeedbackController(feedbackRepository, employeeService);
 const tvController = new TvController(snapshotService, employeeService, rewardService);
 
+// Akses data karyawan :id: admin, diri sendiri, atau atasannya
+const employeeAccess = hierarchyMiddleware(employeeService);
+
 // Public Auth Routes
 api.post('/auth/login', (c) => authController.login(c));
 // Login tanpa password hanya untuk development; di production route ini tidak ada (404)
@@ -63,30 +67,30 @@ api.get('/auth/me', authMiddleware, (c) => authController.me(c));
 api.post('/auth/logout', authMiddleware, (c) => authController.logout(c));
 
 // Protected Employee Routes
-api.get('/employee/:id', authMiddleware, (c) => employeeController.getEmployeeByEmployeeId(c));
-api.get('/employee/:id/hierarchy', authMiddleware, (c) => employeeController.getEmployeeHierarchy(c));
-api.post('/employee/manager-mapping', authMiddleware, (c) => employeeController.setManagerMapping(c));
+api.get('/employee/:id', authMiddleware, employeeAccess, (c) => employeeController.getEmployeeByEmployeeId(c));
+api.get('/employee/:id/hierarchy', authMiddleware, employeeAccess, (c) => employeeController.getEmployeeHierarchy(c));
+api.post('/employee/manager-mapping', authMiddleware, adminMiddleware, (c) => employeeController.setManagerMapping(c));
 
 // Protected Invoice Routes
 api.get('/invoice/snapshot', authMiddleware, adminMiddleware, (c) => invoiceController.snapshotList(c));
 api.patch('/invoice/snapshot/:ai', authMiddleware, adminMiddleware, (c) => invoiceController.updateSnapshot(c));
-api.get('/invoice/account-manager', authMiddleware, (c) => invoiceController.accountManagers(c));
-api.get('/invoice/:id/internal', authMiddleware, (c) => invoiceController.internalInvoice(c));
-api.get('/invoice/:id/implementator', authMiddleware, (c) => invoiceController.implementatorInvoice(c));
-api.get('/invoice/:id/implementator/churn', authMiddleware, (c) => invoiceController.implementatorChurn(c));
-api.get('/invoice/:id/resell', authMiddleware, (c) => invoiceController.resellInvoice(c));
+api.get('/invoice/account-manager', authMiddleware, adminMiddleware, (c) => invoiceController.accountManagers(c));
+api.get('/invoice/:id/internal', authMiddleware, employeeAccess, (c) => invoiceController.internalInvoice(c));
+api.get('/invoice/:id/implementator', authMiddleware, employeeAccess, (c) => invoiceController.implementatorInvoice(c));
+api.get('/invoice/:id/implementator/churn', authMiddleware, employeeAccess, (c) => invoiceController.implementatorChurn(c));
+api.get('/invoice/:id/resell', authMiddleware, employeeAccess, (c) => invoiceController.resellInvoice(c));
 
 // Protected Commission Routes
-api.get('/commission/:id/implementator', authMiddleware, (c) => commissionController.implementatorCommission(c));
-api.get('/commission/:id/implementator/yearly', authMiddleware, (c) => commissionController.implementatorCommissionYearly(c));
-api.get('/commission/:id/sales', authMiddleware, (c) => commissionController.salesCommission(c));
-api.get('/commission/:id/sales/yearly', authMiddleware, (c) => commissionController.salesCommissionYearly(c));
-api.get('/commission/:id/manager', authMiddleware, (c) => commissionController.managerCommission(c));
-api.get('/commission/:id/manager/yearly', authMiddleware, (c) => commissionController.managerCommissionYearly(c));
+api.get('/commission/:id/implementator', authMiddleware, employeeAccess, (c) => commissionController.implementatorCommission(c));
+api.get('/commission/:id/implementator/yearly', authMiddleware, employeeAccess, (c) => commissionController.implementatorCommissionYearly(c));
+api.get('/commission/:id/sales', authMiddleware, employeeAccess, (c) => commissionController.salesCommission(c));
+api.get('/commission/:id/sales/yearly', authMiddleware, employeeAccess, (c) => commissionController.salesCommissionYearly(c));
+api.get('/commission/:id/manager', authMiddleware, employeeAccess, (c) => commissionController.managerCommission(c));
+api.get('/commission/:id/manager/yearly', authMiddleware, employeeAccess, (c) => commissionController.managerCommissionYearly(c));
 
 // Protected Team Routes
-api.get('/team/:id/manager', authMiddleware, (c) => commissionController.managerTeam(c));
-api.get('/team/:id/manager/yearly', authMiddleware, (c) => commissionController.managerTeamYearly(c));
+api.get('/team/:id/manager', authMiddleware, employeeAccess, (c) => commissionController.managerTeam(c));
+api.get('/team/:id/manager/yearly', authMiddleware, employeeAccess, (c) => commissionController.managerTeamYearly(c));
 
 // Admin Target Routes (target New MRC per branch & organisasi untuk reward kuartal)
 api.get('/target', authMiddleware, adminMiddleware, (c) => targetController.list(c));

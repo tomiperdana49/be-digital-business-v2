@@ -23,6 +23,7 @@ export interface IEmployeeRepository {
     getAllEmployees(): Promise<any[]>;
     getActiveEmployees(): Promise<any[]>;
     getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]>;
+    hasManagedInAnyPeriod(managerEmployeeId: string, employeeId: string): Promise<boolean>;
 }
 
 export interface IEmployeeService {
@@ -38,4 +39,5 @@ export interface IEmployeeService {
     getAllEmployees(): Promise<any[]>;
     getActiveEmployees(): Promise<any[]>;
     getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]>;
+    hasManagedInAnyPeriod(managerEmployeeId: string, employeeId: string): Promise<boolean>;
 }

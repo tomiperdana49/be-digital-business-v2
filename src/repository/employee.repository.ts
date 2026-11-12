@@ -197,6 +197,19 @@ export class EmployeeRepository implements IEmployeeRepository {
         return Array.isArray(rows) ? rows : [];
     }
 
+    async hasManagedInAnyPeriod(managerEmployeeId: string, employeeId: string): Promise<boolean> {
+        const query = `
+            SELECT 1
+            FROM employee_manager_snapshots ms
+            INNER JOIN employees m ON m.id = ms.manager_id
+            INNER JOIN employees e ON e.id = ms.employee_id
+            WHERE m.employee_id = ? AND e.employee_id = ?
+            LIMIT 1
+        `;
+        const [rows] = await this.dbPool.query<RowDataPacket[]>(query, [managerEmployeeId, employeeId]);
+        return rows.length > 0;
+    }
+
     async getHierarchy(employeeId: string, activeFrom?: string): Promise<any[]> {
         const query = `
             WITH RECURSIVE employee_hierarchy AS (
