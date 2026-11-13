@@ -16,6 +16,9 @@ const periodHelper = new PeriodHelper();
 const UNFLAGGED_PRORATE_FROM = '2026-10-26';
 // Invoice new yang diterbitkan ulang (is_reissued_new) hanya dikoreksi mulai periode Nov 2026, supaya periode lama tidak berubah.
 const REISSUED_NEW_FROM = '2026-10-26';
+// Prorate awal layanan baru (tanpa invoice bulan penuh pertama di periode yang sama) dijadikan 'new' hanya mulai
+// periode Nov 2026, supaya periode lama tidak berubah.
+const INITIAL_PRORATE_NEW_FROM = '2026-10-26';
 
 /**
  * Invoice bulanan pertama yang sebenarnya prorate (aktivasi di tengah bulan) tapi NIS tidak menandainya:
@@ -59,6 +62,11 @@ async function syncResellInvoices(startDate: string, endDate: string) {
         const initialProrateServiceIds = new Set(
             rows.filter((r: any) => r.is_prorate === 1 && Number(r.new_subscription) > 0).map((r: any) => r.customer_service_id)
         );
+        // Layanan yang invoice bulan penuh pertamanya ikut dibayar di periode ini (invoice itu yang jadi 'new').
+        const firstFullServiceIds = new Set(
+            rows.filter((r: any) => Number(r.is_first_full_invoice) === 1 && initialProrateServiceIds.has(r.customer_service_id))
+                .map((r: any) => r.customer_service_id)
+        );
 
         let successCount = 0;
         let errorCount = 0;
@@ -81,6 +89,14 @@ async function syncResellInvoices(startDate: string, endDate: string) {
                 // (MRC di sini; prorate-nya jadi MRC 0 lewat aturan dedup resellMrc)
                 if (status === 'recurring' && Number(row.is_first_full_invoice) === 1
                     && initialProrateServiceIds.has(row.customer_service_id)) {
+                    status = 'new';
+                }
+                // Prorate awal layanan baru (new_subscription > 0 = invoice pertama layanan) yang invoice bulan penuh
+                // pertamanya tidak dibayar di periode ini: prorate inilah invoice new-nya. Tanpa ini layanan tidak pernah
+                // tercatat new (bulan penuh di periode berikutnya jadi recurring). Contoh: PT Makna Secangkir Kopi, AI 2041187.
+                if (status === 'prorate' && Number(row.new_subscription) > 0
+                    && !firstFullServiceIds.has(row.customer_service_id) && row.paid_date
+                    && format(new Date(row.paid_date), 'yyyy-MM-dd') >= INITIAL_PRORATE_NEW_FROM) {
                     status = 'new';
                 }
                 // Baris invoice baru yang diterbitkan ulang NIS tanpa tanda new_subscription (lihat is_reissued_new)
