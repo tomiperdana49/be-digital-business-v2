@@ -75,11 +75,15 @@ api.post('/employee/manager-mapping', authMiddleware, adminMiddleware, (c) => em
 api.get('/invoice/snapshot', authMiddleware, adminMiddleware, (c) => invoiceController.snapshotList(c));
 api.patch('/invoice/snapshot/:ai', authMiddleware, adminMiddleware, (c) => invoiceController.updateSnapshot(c));
 api.get('/invoice/account-manager', authMiddleware, adminMiddleware, (c) => invoiceController.accountManagers(c));
+api.get('/invoice/referrer-candidates', authMiddleware, adminMiddleware, (c) => invoiceController.referrerCandidates(c));
+api.put('/invoice/snapshot/:ai/referral', authMiddleware, adminMiddleware, (c) => invoiceController.setReferral(c));
+api.delete('/invoice/snapshot/:ai/referral', authMiddleware, adminMiddleware, (c) => invoiceController.deleteReferral(c));
 api.get('/invoice/:id/internal', authMiddleware, employeeAccess, (c) => invoiceController.internalInvoice(c));
 api.get('/invoice/:id/implementator', authMiddleware, employeeAccess, (c) => invoiceController.implementatorInvoice(c));
 api.get('/invoice/:id/implementator/churn', authMiddleware, employeeAccess, (c) => invoiceController.implementatorChurn(c));
 api.get('/invoice/:id/resell', authMiddleware, employeeAccess, (c) => invoiceController.resellInvoice(c));
 api.get('/invoice/:id/sales/churn', authMiddleware, employeeAccess, (c) => invoiceController.salesChurn(c));
+api.get('/invoice/:id/referral', authMiddleware, employeeAccess, (c) => invoiceController.referralInvoice(c));
 
 // Protected Commission Routes
 api.get('/commission/:id/implementator', authMiddleware, employeeAccess, (c) => commissionController.implementatorCommission(c));

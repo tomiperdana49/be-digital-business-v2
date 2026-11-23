@@ -216,11 +216,13 @@ export class CommissionController {
         ]);
 
         const months = await Promise.all(periods.map(async period => {
-            const [own, staff, crossSellDeals] = await Promise.all([
+            const [own, staff, crossSellDeals, referral] = await Promise.all([
                 this.snapshotService.getSalesNewMrcSummary(employee.employee_id, period.startDate, period.endDate),
                 this.employeeService.getStaffForPeriod(employee.id, period.year, period.month),
                 // Deal cross-sell seluruh sales di periode, dibagi per orang (kredit ke AM Resell)
-                this.snapshotService.getCrossSellDeals(period.startDate, period.endDate)
+                this.snapshotService.getCrossSellDeals(period.startDate, period.endDate),
+                // Komisi Referral Internal orang ini sebagai pemberi lead
+                this.snapshotService.getReferralSummary(employee.employee_id, period.startDate, period.endDate)
             ]);
             // Churn diambil sekali dari NIS untuk sales ini + semua staff-nya
             const churn = await this.snapshotService.getSalesChurnSummary(
@@ -257,6 +259,11 @@ export class CommissionController {
                 target: { newMrc: staff.length ? 0 : this.rewardService.resolveMonthlyTarget(targets, employee, period.year, period.month) },
                 ...own,
                 crossSell: this.snapshotService.crossSellFor(crossSellDeals, employee.employee_id),
+                referral: {
+                    value: Math.round(referral.value),
+                    count: referral.count,
+                    deals: referral.deals.filter(d => d.eligible).map(({ eligible, ...deal }) => ({ ...deal, commission: Math.round(deal.commission) }))
+                },
                 churn: churn.get(employee.employee_id)!,
                 team: staff.length
                     ? { newMrc: members.reduce((sum, m) => sum + m.newMrc, 0), includesOwn: false, members }

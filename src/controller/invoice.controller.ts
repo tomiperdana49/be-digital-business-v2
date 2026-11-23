@@ -111,6 +111,54 @@ export class InvoiceController {
         return ApiResponse.success(c, result, "Snapshot updated successfully");
     }
 
+    async referrerCandidates(c: Context) {
+        const data = await this.snapshotService.getReferrerCandidates();
+        return ApiResponse.success(c, data, "Referrer candidates retrieved successfully");
+    }
+
+    /** Isi/ganti pemberi lead (Referral Internal) satu invoice. Tidak mengubah snapshot/is_adjust. */
+    async setReferral(c: Context) {
+        const ai = Number(c.req.param('ai'));
+        if (!ai || Number.isNaN(ai)) {
+            throw new BadRequestException('Valid ai is required');
+        }
+
+        const body = await c.req.json();
+        const referrerId = typeof body.referrerId === 'string' ? body.referrerId.trim() : '';
+        if (!referrerId) {
+            throw new BadRequestException('referrerId is required');
+        }
+        const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim().slice(0, 255) : null;
+        const user = c.get('user');
+
+        await this.snapshotService.setReferral(ai, referrerId, note, String(user?.sub ?? ''));
+        return ApiResponse.success(c, null, "Referral saved successfully");
+    }
+
+    async deleteReferral(c: Context) {
+        const ai = Number(c.req.param('ai'));
+        if (!ai || Number.isNaN(ai)) {
+            throw new BadRequestException('Valid ai is required');
+        }
+
+        await this.snapshotService.deleteReferral(ai);
+        return ApiResponse.success(c, null, "Referral deleted successfully");
+    }
+
+    /** Rincian deal referral milik satu pemberi lead di periode (dasar baris "Referral" di Total Commission). */
+    async referralInvoice(c: Context) {
+        const { month: monthQuery, year: yearQuery } = c.req.query();
+        const id = c.req.param('id');
+
+        if (!id) {
+            return ApiResponse.error(c, "id is required", 400);
+        }
+
+        const { startDate, endDate } = this.periodHelper.getPeriodFromQuery(monthQuery, yearQuery);
+        const data = await this.snapshotService.getReferralSummary(id, startDate, endDate);
+        return ApiResponse.success(c, data, "Referral invoice retrieved successfully");
+    }
+
     async implementatorChurn(c: Context) {
         const { month: monthQuery, year: yearQuery } = c.req.query();
         const id = c.req.param('id');

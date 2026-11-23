@@ -44,10 +44,15 @@ export class SnapshotRepository implements ISnapshotRepository {
                 se.name AS sales_name,
                 se.photo_profile AS sales_photo,
                 ie.name AS implementator_name,
-                ie.photo_profile AS implementator_photo
+                ie.photo_profile AS implementator_photo,
+                r.referrer_id,
+                r.note AS referral_note,
+                re.name AS referrer_name
             FROM snapshots s
             LEFT JOIN employees se ON s.sales_id = se.employee_id
             LEFT JOIN employees ie ON s.implementator_id = ie.employee_id
+            LEFT JOIN referrals r ON r.ai = s.ai
+            LEFT JOIN employees re ON re.employee_id = r.referrer_id
             ${where}
             ORDER BY s.paid_date DESC, s.ai DESC
             LIMIT ? OFFSET ?
@@ -83,6 +88,74 @@ export class SnapshotRepository implements ISnapshotRepository {
             ORDER BY s.paid_date, s.ai
         `;
         const [rows] = await this.dbPool.query(query, [startDate, endDate]);
+        return rows as any[];
+    }
+
+    /**
+     * Invoice yang pemberi lead-nya referrerId dengan paid_date di periode (semua status; kelayakan
+     * dicek di service). Baris snapshot di-join lewat ai, jadi tetap terhubung walau di-sync ulang.
+     */
+    async getReferralInvoice(referrerId: string, startDate: string, endDate: string): Promise<any[]> {
+        const query = `
+            SELECT s.*, r.referrer_id, r.note AS referral_note, se.name AS sales_name
+            FROM referrals r
+            INNER JOIN snapshots s ON s.ai = r.ai
+            LEFT JOIN employees se ON se.employee_id = s.sales_id
+            WHERE r.referrer_id = ?
+              AND s.paid_date BETWEEN ? AND ?
+            ORDER BY s.paid_date, s.ai
+        `;
+        const [rows] = await this.dbPool.query(query, [referrerId, startDate, endDate]);
+        return rows as any[];
+    }
+
+    async getSnapshotByAi(ai: number): Promise<any | null> {
+        const [rows] = await this.dbPool.query(`SELECT * FROM snapshots WHERE ai = ?`, [ai]);
+        return (rows as any[])[0] ?? null;
+    }
+
+    async getEmployeeByEmployeeId(employeeId: string): Promise<any | null> {
+        const [rows] = await this.dbPool.query(`SELECT * FROM employees WHERE employee_id = ?`, [employeeId]);
+        return (rows as any[])[0] ?? null;
+    }
+
+    /** Referral lain (ai berbeda) untuk customer yang sama: satu customer hanya boleh satu pemberi lead. */
+    async findOtherReferralForCustomer(customerId: string, ai: number): Promise<any | null> {
+        const query = `
+            SELECT r.ai, r.referrer_id, s.invoice_number
+            FROM referrals r
+            INNER JOIN snapshots s ON s.ai = r.ai
+            WHERE s.customer_id = ? AND r.ai <> ?
+            LIMIT 1
+        `;
+        const [rows] = await this.dbPool.query(query, [customerId, ai]);
+        return (rows as any[])[0] ?? null;
+    }
+
+    async upsertReferral(ai: number, referrerId: string, note: string | null, createdBy: string): Promise<any> {
+        const query = `
+            INSERT INTO referrals (ai, referrer_id, note, created_by)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE referrer_id = VALUES(referrer_id), note = VALUES(note), created_by = VALUES(created_by)
+        `;
+        const [result] = await this.dbPool.query(query, [ai, referrerId, note, createdBy]);
+        return result;
+    }
+
+    async deleteReferral(ai: number): Promise<any> {
+        const [result] = await this.dbPool.query(`DELETE FROM referrals WHERE ai = ?`, [ai]);
+        return result;
+    }
+
+    /** Account Manager aktif, kandidat pemberi lead. */
+    async getReferrerCandidates(): Promise<any[]> {
+        const query = `
+            SELECT employee_id, name, photo_profile
+            FROM employees
+            WHERE job_position = 'Account Manager' AND deactivated_at IS NULL
+            ORDER BY name
+        `;
+        const [rows] = await this.dbPool.query(query);
         return rows as any[];
     }
 

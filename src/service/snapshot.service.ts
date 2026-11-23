@@ -1,5 +1,6 @@
-import { CrossSellDealEntry, ISnapshotRepository, ISnapshotService, SalesChurnSummary, SalesCrossSell, SalesDeal, SalesNewMrcSummary, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
-import { Calculate } from '../helper/calculate';
+import { CrossSellDealEntry, ISnapshotRepository, ISnapshotService, ReferralDeal, SalesChurnSummary, SalesCrossSell, SalesDeal, SalesNewMrcSummary, SalesReferral, SnapshotData, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
+import { Calculate, REFERRAL_FROM } from '../helper/calculate';
+import { BadRequestException, ConflictException, NotFoundException } from '../helper/exception';
 import { INisService } from '../interface/nis.interface';
 import { PeriodHelper } from '../helper/period';
 import { format } from 'date-fns';
@@ -47,6 +48,99 @@ export class SnapshotService implements ISnapshotService {
         return (row.mrc_override !== null && row.mrc_override !== undefined)
             ? Number(row.mrc_override)
             : mrc;
+    }
+
+    /**
+     * Komisi pemberi lead untuk satu baris snapshot. Hanya invoice registrasi pertama (status 'new') dengan
+     * paid_date >= REFERRAL_FROM; MRC sama dengan New MRC invoice itu (termasuk mrc_override). Baris lain = 0
+     * (mis. sync mengubah status invoice yang sudah diberi referral) dan ditandai eligible = false.
+     */
+    private referralCommissionFor(row: any): { eligible: boolean; mrc: number; commissionAmount: number; commissionPercentage: number } {
+        const eligible = Calculate.isReferralEligible(row.status, toDateString(row.paid_date));
+        if (!eligible) {
+            return { eligible, mrc: 0, commissionAmount: 0, commissionPercentage: 0 };
+        }
+        const subscription = Number(row.subscription) || 0;
+        const mrc = this.applyMrcOverride(row, Calculate.mrc(subscription, Number(row.month_period) || 1, 'new'));
+        return { eligible, mrc, ...Calculate.referralCommission(row.service_type, mrc) };
+    }
+
+    async getReferralSummary(referrerId: string, startDate: string, endDate: string): Promise<SalesReferral> {
+        const rows = await this.snapshotRepository.getReferralInvoice(referrerId, startDate, endDate);
+        const invoiceDates = rows.length
+            ? new Map<number, any>((await this.nisService.getInvoiceDatesByAi(rows.map((r: any) => Number(r.ai)))).map((r: any) => [Number(r.ai), r]))
+            : new Map<number, any>();
+
+        const deals: ReferralDeal[] = rows.map((row: any) => {
+            const res = this.referralCommissionFor(row);
+            return {
+                ...this.toDeal(row, res.mrc, invoiceDates),
+                sellerEmployeeId: row.sales_id ?? null,
+                sellerName: row.sales_name ?? null,
+                commissionPercentage: res.commissionPercentage,
+                commission: res.commissionAmount,
+                eligible: res.eligible,
+                note: row.referral_note ?? null
+            };
+        });
+
+        const eligibleDeals = deals.filter(d => d.eligible);
+        return {
+            value: eligibleDeals.reduce((sum, d) => sum + d.commission, 0),
+            count: eligibleDeals.length,
+            deals
+        };
+    }
+
+    async getReferrerCandidates(): Promise<any> {
+        const rows = await this.snapshotRepository.getReferrerCandidates();
+        return rows.map((row: any) => ({
+            employeeId: row.employee_id,
+            name: row.name,
+            photoProfile: row.photo_profile || ''
+        }));
+    }
+
+    /**
+     * Isi/ganti pemberi lead satu invoice. Aturan Referral Internal (antar sales):
+     * pemberi lead = Account Manager aktif, bukan sales invoice itu; invoice registrasi pertama (status 'new')
+     * dengan paid_date >= REFERRAL_FROM; satu pemberi lead per customer.
+     */
+    async setReferral(ai: number, referrerId: string, note: string | null, createdBy: string): Promise<void> {
+        const snapshot = await this.snapshotRepository.getSnapshotByAi(ai);
+        if (!snapshot) {
+            throw new NotFoundException('Snapshot not found');
+        }
+        if (snapshot.status !== 'new') {
+            throw new BadRequestException('Referral hanya untuk invoice registrasi pertama (status New)');
+        }
+        if (!Calculate.isReferralEligible(snapshot.status, toDateString(snapshot.paid_date))) {
+            throw new BadRequestException(`Referral hanya untuk invoice dengan Paid Date mulai ${REFERRAL_FROM}`);
+        }
+
+        const referrer = await this.snapshotRepository.getEmployeeByEmployeeId(referrerId);
+        if (!referrer || referrer.deactivated_at) {
+            throw new BadRequestException('Pemberi lead tidak ditemukan atau sudah tidak aktif');
+        }
+        if (referrer.job_position !== 'Account Manager') {
+            throw new BadRequestException('Pemberi lead harus Account Manager');
+        }
+        if (referrer.employee_id === snapshot.sales_id) {
+            throw new BadRequestException('Pemberi lead tidak boleh sama dengan sales invoice ini');
+        }
+
+        if (snapshot.customer_id) {
+            const other = await this.snapshotRepository.findOtherReferralForCustomer(snapshot.customer_id, ai);
+            if (other) {
+                throw new ConflictException(`Customer ${snapshot.customer_id} sudah punya pemberi lead di invoice ${other.invoice_number} (AI ${other.ai})`);
+            }
+        }
+
+        await this.snapshotRepository.upsertReferral(ai, referrer.employee_id, note, createdBy);
+    }
+
+    async deleteReferral(ai: number): Promise<void> {
+        await this.snapshotRepository.deleteReferral(ai);
     }
 
     async getSnapshotList(filters: SnapshotListFilters): Promise<any> {
@@ -117,7 +211,21 @@ export class SnapshotService implements ISnapshotService {
                 mrc,
                 commissionPercentage,
                 commission: commissionAmount,
-                isAdjust: Boolean(row.is_adjust)
+                isAdjust: Boolean(row.is_adjust),
+                referral: row.referrer_id
+                    ? (() => {
+                        const res = this.referralCommissionFor(row);
+                        return {
+                            referrerId: row.referrer_id,
+                            referrerName: row.referrer_name || '',
+                            note: row.referral_note ?? null,
+                            eligible: res.eligible,
+                            commissionPercentage: res.commissionPercentage,
+                            commission: res.commissionAmount
+                        };
+                    })()
+                    : null,
+                referralEligible: Calculate.isReferralEligible(row.status, toDateString(row.paid_date))
             };
         });
 
@@ -322,7 +430,11 @@ export class SnapshotService implements ISnapshotService {
             commission: {
                 new: Calculate.trend(current.commissionNew, previous.commissionNew),
                 recurring: Calculate.trend(current.commissionRecurring, previous.commissionRecurring),
-                total: Calculate.trend(current.commissionNew + current.commissionRecurring, previous.commissionNew + previous.commissionRecurring)
+                referral: Calculate.trend(current.commissionReferral, previous.commissionReferral),
+                total: Calculate.trend(
+                    current.commissionNew + current.commissionRecurring + current.commissionReferral,
+                    previous.commissionNew + previous.commissionRecurring + previous.commissionReferral
+                )
             },
             mrc: Calculate.trend(current.totalMrc, previous.totalMrc),
             ...churn,
@@ -347,7 +459,7 @@ export class SnapshotService implements ISnapshotService {
         const aggregatedData = await Promise.all(promises);
 
         return aggregatedData.map(data => ({
-            commission: data.commissionNew + data.commissionRecurring,
+            commission: data.commissionNew + data.commissionRecurring + data.commissionReferral,
             mrc: data.totalMrc,
             subscription: data.totalSubscription,
             newCustomer: data.newCustomer,
@@ -545,10 +657,20 @@ export class SnapshotService implements ISnapshotService {
     }
 
     private async aggregateSalesCommission(employeeId: string, startDate: string, endDate: string) {
-        const [internalSnapshots, resellSnapshots] = await Promise.all([
+        const [internalSnapshots, resellSnapshots, referralSnapshots] = await Promise.all([
             this.snapshotRepository.getInternalInvoice(employeeId, startDate, endDate),
-            this.snapshotRepository.getResellInvoice(employeeId, startDate, endDate)
+            this.snapshotRepository.getResellInvoice(employeeId, startDate, endDate),
+            // Periode sebelum REFERRAL_FROM tidak mungkin punya komisi referral; tidak perlu query
+            endDate >= REFERRAL_FROM
+                ? this.snapshotRepository.getReferralInvoice(employeeId, startDate, endDate)
+                : Promise.resolve([])
         ]);
+
+        // Komisi Referral Internal sebagai pemberi lead. Masuk Total Commission (dan pool 25% manager),
+        // tapi tidak menambah MRC/subscription/New Customer orang ini (itu milik penjualnya).
+        const commissionReferral = referralSnapshots.reduce(
+            (sum: number, row: any) => sum + this.referralCommissionFor(row).commissionAmount, 0
+        );
 
         let commissionNew = 0;
         let commissionRecurring = 0;
@@ -618,7 +740,7 @@ export class SnapshotService implements ISnapshotService {
             if (['new', 'upgrade', 'prorate', 'termin', 'add'].includes(status)) newAccount += Number(row.total_account) || 0;
         }
 
-        return { commissionNew, commissionRecurring, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount, mrcNew, mrcAddon, dealCount: dealKeys.size, dealRows, renewalRows };
+        return { commissionNew, commissionRecurring, commissionReferral, totalMrc, totalSubscription, subscriptionRecurring, newCustomer: newCustomerIds.size, newAccount, mrcNew, mrcAddon, dealCount: dealKeys.size, dealRows, renewalRows };
     }
 
     async getInternalInvoiceDetail(employeeId: string, startDate: string, endDate: string): Promise<any> {
@@ -792,7 +914,7 @@ export class SnapshotService implements ISnapshotService {
         const results = await Promise.all(
             employees.map(async (emp) => {
                 const data = await this.aggregateSalesCommission(emp.employeeId, startDate, endDate);
-                const totalCommission = data.commissionNew + data.commissionRecurring;
+                const totalCommission = data.commissionNew + data.commissionRecurring + data.commissionReferral;
 
                 return {
                     employeeId: emp.employeeId,
@@ -824,7 +946,7 @@ export class SnapshotService implements ISnapshotService {
         }
         const roster = Array.from(rosterMap.values());
 
-        const zeroData = { commissionNew: 0, commissionRecurring: 0, totalMrc: 0, totalSubscription: 0, newCustomer: 0, newAccount: 0 };
+        const zeroData = { commissionNew: 0, commissionRecurring: 0, commissionReferral: 0, totalMrc: 0, totalSubscription: 0, newCustomer: 0, newAccount: 0 };
 
         const results = await Promise.all(
             roster.map(async (emp) => {
@@ -848,7 +970,7 @@ export class SnapshotService implements ISnapshotService {
                     name: emp.name,
                     photoProfile: emp.photoProfile,
                     monthly: monthlyData.map(data => {
-                        const totalCommission = data.commissionNew + data.commissionRecurring;
+                        const totalCommission = data.commissionNew + data.commissionRecurring + data.commissionReferral;
                         return {
                             commission: totalCommission,
                             mrc: data.totalMrc,
@@ -879,18 +1001,20 @@ export class SnapshotService implements ISnapshotService {
         const sumData = (results: typeof currentResults) => results.reduce((acc, data) => ({
             commissionNew: acc.commissionNew + data.commissionNew,
             commissionRecurring: acc.commissionRecurring + data.commissionRecurring,
+            commissionReferral: acc.commissionReferral + data.commissionReferral,
             totalMrc: acc.totalMrc + data.totalMrc,
             totalSubscription: acc.totalSubscription + data.totalSubscription,
             subscriptionRecurring: acc.subscriptionRecurring + data.subscriptionRecurring,
             newCustomer: acc.newCustomer + data.newCustomer,
             newAccount: acc.newAccount + data.newAccount
-        }), { commissionNew: 0, commissionRecurring: 0, totalMrc: 0, totalSubscription: 0, subscriptionRecurring: 0, newCustomer: 0, newAccount: 0 });
+        }), { commissionNew: 0, commissionRecurring: 0, commissionReferral: 0, totalMrc: 0, totalSubscription: 0, subscriptionRecurring: 0, newCustomer: 0, newAccount: 0 });
 
         const current = sumData(currentResults);
         const previous = sumData(previousResults);
 
-        const currentTotal = current.commissionNew + current.commissionRecurring;
-        const previousTotal = previous.commissionNew + previous.commissionRecurring;
+        // Total komisi tim termasuk komisi referral staff (pool 25% manager ikut)
+        const currentTotal = current.commissionNew + current.commissionRecurring + current.commissionReferral;
+        const previousTotal = previous.commissionNew + previous.commissionRecurring + previous.commissionReferral;
 
         // "Cust Lama" = komisi & subscription invoice RECURRING pribadi manager sebagai sales (sales_id = manager),
         // sama dengan tabel "Manager's own recurring invoices". Invoice new/upgrade/prorate/add milik manager
@@ -932,6 +1056,7 @@ export class SnapshotService implements ISnapshotService {
             commission: {
                 new: Calculate.trend(current.commissionNew, previous.commissionNew),
                 recurring: Calculate.trend(current.commissionRecurring, previous.commissionRecurring),
+                referral: Calculate.trend(current.commissionReferral, previous.commissionReferral),
                 total: Calculate.trend(currentTotal, previousTotal),
                 custLama: custLamaCommission
             },
@@ -966,15 +1091,16 @@ export class SnapshotService implements ISnapshotService {
             results.reduce((acc, data) => ({
                 commissionNew: acc.commissionNew + data.commissionNew,
                 commissionRecurring: acc.commissionRecurring + data.commissionRecurring,
+                commissionReferral: acc.commissionReferral + data.commissionReferral,
                 totalMrc: acc.totalMrc + data.totalMrc,
                 totalSubscription: acc.totalSubscription + data.totalSubscription,
                 newCustomer: acc.newCustomer + data.newCustomer,
                 newAccount: acc.newAccount + data.newAccount
-            }), { commissionNew: 0, commissionRecurring: 0, totalMrc: 0, totalSubscription: 0, newCustomer: 0, newAccount: 0 });
+            }), { commissionNew: 0, commissionRecurring: 0, commissionReferral: 0, totalMrc: 0, totalSubscription: 0, newCustomer: 0, newAccount: 0 });
 
         return monthlyResults.map(staffResults => {
             const data = sumData(staffResults);
-            const totalCommission = data.commissionNew + data.commissionRecurring;
+            const totalCommission = data.commissionNew + data.commissionRecurring + data.commissionReferral;
             return {
                 managerCommission: totalCommission * 0.25,
                 commission: totalCommission,

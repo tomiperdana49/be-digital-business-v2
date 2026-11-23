@@ -7,7 +7,27 @@ export type SnapshotType = 'internal' | 'resell';
  */
 export const NEW_RULE_CUTOFF_DATE = '2026-07-26';
 
+/**
+ * Komisi Referral Internal berlaku untuk invoice dengan paid_date mulai tanggal ini (periode November 2026).
+ * Periode sebelumnya tidak berubah.
+ */
+export const REFERRAL_FROM = '2026-10-26';
+
 export class Calculate {
+    /**
+     * Komisi pemberi lead (assist) Referral Internal, sekali bayar di invoice registrasi pertama (status 'new'):
+     * 10% dari new MRC untuk produk internal, 1% untuk produk resell. Tanpa booster.
+     */
+    static referralCommission(serviceType: SnapshotType, mrc: number): { commissionAmount: number; commissionPercentage: number } {
+        const commissionPercentage = serviceType === 'internal' ? 10 : 1;
+        return { commissionAmount: mrc * (commissionPercentage / 100), commissionPercentage };
+    }
+
+    /** Invoice yang bisa diberi pemberi lead: registrasi pertama (status 'new') dengan paid_date >= REFERRAL_FROM. */
+    static isReferralEligible(status: string, paidDate: string | null): boolean {
+        return status === 'new' && !!paidDate && paidDate >= REFERRAL_FROM;
+    }
+
     /**
      * Apakah startDate suatu periode sudah masuk aturan baru (>= 26 Juli 2026).
      */

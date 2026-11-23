@@ -190,6 +190,8 @@ Insert/update ke tabel ini pakai `INSERT ... ON DUPLICATE KEY UPDATE` (upsert be
 - `insertSnapshot` membungkus setiap kolom pada `ON DUPLICATE KEY UPDATE` dengan `IF(is_adjust, <nilai lama>, VALUES(<nilai baru>))` — baris adjusted mempertahankan nilainya walau `ai`-nya muncul lagi di hasil crawl.
 - Kolom `is_adjust` sengaja **tidak** diikutkan di daftar kolom `INSERT`, jadi baris baru selalu mulai dari `false` (default) dan baris duplikat tetap mempertahankan nilai `is_adjust`-nya. Field ini di-set manual (bukan oleh job) dan diekspos sebagai `isAdjust` di response detail invoice.
 
+**Tabel `referrals`** — pemberi lead (Referral Internal) per invoice, diisi admin lewat `/invoice` (lihat §8.7). PK `ai` (= `snapshots.ai`), `referrer_id`, `note`, `created_by`, `created_at`, `updated_at`. Sengaja terpisah dari `snapshots`: mengisinya tidak membuat baris jadi `is_adjust`, dan job sync tidak menyentuhnya (baris snapshot yang dihapus lalu diinsert ulang tetap ter-join lewat `ai`).
+
 ### 5.2 NIS DB (`nisPool`) — sistem billing legacy eksternal, read-only
 
 Tabel-tabel ini **bukan** milik aplikasi ini — hanya dibaca (skema PascalCase, tidak ada file DDL-nya di repo ini). Referensi dari [`nis.repository.ts`](src/repository/nis.repository.ts):
@@ -343,6 +345,8 @@ managerCommission = totalCommission(seluruh staff di bawahnya) × 25%
 ```
 di mana `totalCommission` = jumlah komisi sales internal + resell (new + recurring) seluruh staff yang berada langsung di bawah manager tersebut (`employees.manager_id`).
 
+Mulai periode November 2026, `totalCommission` staff ikut memuat komisi referral (§8.7), jadi pool 25% manager juga ikut.
+
 ### 8.5 MRC (Monthly Recurring Cost)
 ```
 mrc = subscription / monthPeriod
@@ -359,6 +363,21 @@ trend      = growth ≥ 0 ? 'up' : 'down'
 Periode sebelumnya dihitung dengan menggeser mundur `startDate`/`endDate` sepanjang durasi periode berjalan (bukan selalu bulan kalender sebelumnya — lihat kode di `SnapshotService`).
 
 ---
+
+### 8.7 Komisi Referral Internal (`Calculate.referralCommission`)
+
+Kolaborasi antar sales: Account Manager yang memberi lead (assist) dapat komisi dari invoice yang dijual AM lain (scorer). Non-sales punya jalur referral sendiri di luar aplikasi ini.
+
+| Produk | Komisi pemberi lead |
+|---|---|
+| Internal | **10%** × new MRC |
+| Resell | **1%** × new MRC |
+
+- Sekali bayar, hanya invoice registrasi pertama (status `new`) dengan `paid_date >= REFERRAL_FROM` (`2026-10-26`, periode November 2026); periode sebelumnya tidak berubah. Tanpa booster.
+- new MRC = MRC invoice itu seperti di New MRC (`subscription / month_period`, atau `mrc_override`).
+- Masuk **Total Commission** pemberi lead (`commission.referral`) dan pool 25% manager-nya. Tidak menambah MRC, subscription, New Customer, maupun New MRC/target pemberi lead. Komisi scorer tidak berubah (booster 15% tetap dari deteksi cross-sell biasa).
+- Validasi saat diisi (`PUT /invoice/snapshot/:ai/referral`): pemberi lead Account Manager aktif, bukan sales invoice itu; invoice `new` dan `paid_date >= REFERRAL_FROM`; satu pemberi lead per customer (`customer_id` snapshot).
+- Kalau sync kemudian mengubah status invoice yang sudah diberi referral, komisinya jadi 0 dan ditandai `eligible: false`.
 
 ## 9. Periode Fiskal (Cut-off 26–25)
 
@@ -438,6 +457,10 @@ Query param opsional untuk semua: `?month=&year=` (default: periode berjalan, cu
 | GET | `/invoice/:id/internal` | Detail invoice internal milik sales `:id`, termasuk info implementator |
 | GET | `/invoice/:id/implementator` | Detail invoice yang ditangani implementator `:id`, termasuk info sales |
 | GET | `/invoice/:id/resell` | Detail invoice resell milik sales `:id`, termasuk `price`/`markup`/`margin` |
+| GET | `/invoice/:id/referral` | Deal referral milik pemberi lead `:id` (§8.7): `value`, `count`, `deals[]` (invoice, penerima lead, `mrc`, `commissionPercentage`, `commission`, `eligible`, `note`) |
+| GET | `/invoice/referrer-candidates` | (admin) Account Manager aktif, kandidat pemberi lead |
+| PUT | `/invoice/snapshot/:ai/referral` | (admin) Body `{ referrerId, note? }`: isi/ganti pemberi lead. Tidak mengubah snapshot/`is_adjust` |
+| DELETE | `/invoice/snapshot/:ai/referral` | (admin) Hapus pemberi lead |
 
 **Contoh response** `GET /invoice/E001/internal`:
 ```json
@@ -554,6 +577,8 @@ Untuk sistem lain yang butuh data dashboard tanpa login user. Wajib header `X-AP
 - Hanya catatan: MRC cross-sell **tidak** mengubah `newMrc` siapa pun (penjual tetap mendapat New MRC-nya). Jangan dijumlahkan ke maupun dikurangkan dari `newMrc`.
 - Customer ID baru untuk perusahaan yang sama tidak terdeteksi (pencocokan hanya berdasarkan customer ID).
 - `team.members[].crossSell` berisi `value`, `count`, dan `asSeller` (`value`, `count`), tanpa daftar deal.
+
+**`referral`** — Komisi Referral Internal orang ini sebagai pemberi lead (§8.7): `value` (rupiah, dibulatkan), `count`, `deals[]` = format `newMrc.deals[]` + `sellerEmployeeId`, `sellerName`, `commissionPercentage`, `commission`, `note`. Hanya deal yang dihitung (status `new`, periode November 2026 ke atas). Berbeda dari `crossSell` (kredit MRC untuk AM Resell, bukan rupiah).
 
 **`churn`** — layanan digital business milik sales yang unreg (`CustStatus = 'NA'`, `CustUnregDate` di periode), kriteria sama dengan kartu MRC churn dashboard:
 - `value` = kartu **MRC churn** (dibulatkan); `customerCount` = jumlah `customerId` berbeda; `customers[]` per layanan, `mrcLost` = `Subscription / bulan InvoiceType`, `effectiveDate` = `CustUnregDate`.

@@ -59,6 +59,29 @@ export interface ISnapshotRepository {
     updateSnapshot(ai: number, data: SnapshotUpdateData): Promise<any>;
     getSnapshotsWithoutImplementator(startDate: string, endDate: string): Promise<any[]>;
     carryOverImplementator(ai: number, implementatorId: string, periodDate: string): Promise<any>;
+    getReferralInvoice(referrerId: string, startDate: string, endDate: string): Promise<any[]>;
+    getSnapshotByAi(ai: number): Promise<any | null>;
+    getEmployeeByEmployeeId(employeeId: string): Promise<any | null>;
+    findOtherReferralForCustomer(customerId: string, ai: number): Promise<any | null>;
+    upsertReferral(ai: number, referrerId: string, note: string | null, createdBy: string): Promise<any>;
+    deleteReferral(ai: number): Promise<any>;
+    getReferrerCandidates(): Promise<any[]>;
+}
+
+/** Deal referral untuk pemberi lead: invoice registrasi pertama yang lead-nya dari orang ini. */
+export interface ReferralDeal extends SalesDeal {
+    sellerEmployeeId: string | null;
+    sellerName: string | null;
+    commissionPercentage: number;
+    commission: number;
+    eligible: boolean;
+    note: string | null;
+}
+
+export interface SalesReferral {
+    value: number;
+    count: number;
+    deals: ReferralDeal[];
 }
 
 export interface SalesDeal {
@@ -168,4 +191,8 @@ export interface ISnapshotService {
     getManagerTeamYearlySummary(employeesByMonth: { employeeId: string; name: string; photoProfile: string }[][], year: number): Promise<any>;
     getManagerCommissionSummary(employeeIds: string[], startDate: string, endDate: string, managerId?: string): Promise<any>;
     getManagerCommissionYearlySummary(employeeIdsByMonth: string[][], year: number): Promise<any[]>;
+    getReferralSummary(referrerId: string, startDate: string, endDate: string): Promise<SalesReferral>;
+    setReferral(ai: number, referrerId: string, note: string | null, createdBy: string): Promise<void>;
+    deleteReferral(ai: number): Promise<void>;
+    getReferrerCandidates(): Promise<any[]>;
 }

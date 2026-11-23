@@ -109,3 +109,17 @@ CREATE TABLE branch_targets (
 INSERT INTO branch_targets (branch_id, year, month, target_new_mrc) VALUES
     ('003', 2026, 7, 3000000),
     ('*', 2026, 7, 2424000);
+
+-- Komisi Referral Internal (antar sales): pemberi lead (assist) per invoice, diisi admin lewat /invoice.
+-- Terpisah dari snapshots supaya mengisinya tidak mengubah is_adjust dan tidak tersentuh job sync
+-- (baris snapshot yang dihapus lalu diinsert ulang oleh sync tetap pakai ai yang sama).
+-- Satu pemberi lead per invoice (ai) dan per customer (divalidasi di aplikasi).
+CREATE TABLE referrals (
+    ai INT PRIMARY KEY,
+    referrer_id VARCHAR(20) NOT NULL,
+    note VARCHAR(255) NULL,
+    created_by VARCHAR(20) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_referrals_referrer (referrer_id)
+);
