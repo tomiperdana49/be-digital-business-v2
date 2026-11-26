@@ -12,6 +12,17 @@ const snapshotRepository = new SnapshotRepository(dashboardPool);
 const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const periodHelper = new PeriodHelper();
 
+// SE booster 15%: pelanggan internet bisnis (access_business) juga dihitung cross-sell, selain produk resell/digital.
+// Hanya untuk pembayaran mulai periode Des 2026, supaya periode lama tidak berubah.
+const INTERNET_BOOSTER_FROM = '2026-11-26';
+
+function crossSellCount(row: any): number {
+    const digital = Number(row.cross_sell_count) || 0;
+    const paidDate = row.paid_date ? format(new Date(row.paid_date), 'yyyy-MM-dd') : '';
+    const internet = paidDate >= INTERNET_BOOSTER_FROM ? Number(row.internet_business_count) || 0 : 0;
+    return digital + internet;
+}
+
 async function syncInternalInvoices(startDate: string, endDate: string) {
     console.log('[SYNC] Starting internal invoice synchronization from NIS...');
 
@@ -102,7 +113,7 @@ async function syncInternalInvoices(startDate: string, endDate: string) {
                     service_id: row.service_id,
                     service_name: row.service_name,
                     service_type: 'internal',
-                    cross_sell_count: row.cross_sell_count,
+                    cross_sell_count: crossSellCount(row),
                     sales_id: row.sales_id,
                     manager_sales_id: row.sales_manager_id,
                     implementator_id: row.implementator_id,

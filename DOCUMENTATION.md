@@ -296,6 +296,8 @@ Semua rumus ada di [`src/helper/calculate.ts`](src/helper/calculate.ts) (class `
 | `new` / `termin`, tanpa cross-sell | **12%** |
 | `recurring` (atau status lain) | **1%** |
 
+`cross_sell_count` (booster 15%, sesuai SE) = layanan `digital_business` lain (selain domain) di CustId yang sama, ditambah mulai pembayaran `2026-11-26` (periode Desember 2026, `INTERNET_BOOSTER_FROM` di `internal-invoice.job.ts`) layanan **internet bisnis** (`ServiceCategory = 'access_business'`) yang belum `NA` di CustId yang sama. Internet rumahan (`access_home`) tidak dihitung. Perusahaan yang sama dengan CustId berbeda tidak terdeteksi, jadi koreksinya manual (`cross_sell_count = 1`, `is_adjust = 1`).
+
 **Aturan khusus pembayaran dimuka >12 bulan** (hanya untuk `status = 'new'` dan `months > 12`):
 ```
 first12MonthsAmount = dpp × (12 / months)

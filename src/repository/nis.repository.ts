@@ -96,6 +96,7 @@ export class NisRepository implements INisRepository {
                 s.ServiceType AS service_name,
                 s.BusinessOperation AS service_type,
                 COUNT(DISTINCT cross_tbl.ServiceId) AS cross_sell_count,
+                COUNT(DISTINCT internet_tbl.CustServId) AS internet_business_count,
                 cs.SalesId AS sales_id,
                 cs.ManagerSalesId AS sales_manager_id,
                 cs.InvoiceType AS invoice_type,
@@ -134,8 +135,18 @@ export class NisRepository implements INisRepository {
                 AND (s2.ServiceCategory = 'digital_business')
                 -- Domain tidak dihitung cross-sell
                 AND (s2.ServiceGroup IS NULL OR s2.ServiceGroup <> 'DO')
-            ) AS cross_tbl 
+            ) AS cross_tbl
                 ON cross_tbl.CustId = nci.CustId AND cross_tbl.ServiceId <> cs.ServiceId
+            -- Layanan internet bisnis aktif di customer yang sama: syarat booster menurut SE (lihat internal-invoice.job.ts)
+            LEFT JOIN (
+                SELECT cs3.CustId, cs3.CustServId
+                FROM CustomerServices cs3
+                JOIN Services s3
+                    ON cs3.ServiceId = s3.ServiceId
+                WHERE (cs3.CustStatus IS NULL OR cs3.CustStatus <> 'NA')
+                AND s3.ServiceCategory = 'access_business'
+            ) AS internet_tbl
+                ON internet_tbl.CustId = nci.CustId
             WHERE s.BusinessOperation = 'internal'
                 AND s.ServiceCategory = 'digital_business'
                 AND LOWER(s.ServiceType) NOT LIKE '%lisensi%'
