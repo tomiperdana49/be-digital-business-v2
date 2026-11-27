@@ -1,6 +1,22 @@
 import { Pool } from 'mysql2/promise';
 import { SnapshotData, ISnapshotRepository, SnapshotListFilters, SnapshotUpdateData } from '../interface/snapshot.interface';
 
+/** Kunci periode komisi (26-25) dari sebuah tanggal: tanggal >= 26 ikut bulan berikutnya. */
+const periodKey = (column: string) => `DATE_FORMAT(IF(DAY(${column}) >= 26, ${column} + INTERVAL 7 DAY, ${column}), '%Y-%m')`;
+
+/**
+ * 1 jika sales baris ini punya minimal satu new/termin internal dengan cross-sell di periode yang sama.
+ * SE: rate booster 15% berlaku untuk seluruh New Service sales itu di periode tersebut.
+ */
+const PERIOD_BOOSTER_SQL = `EXISTS (
+                    SELECT 1 FROM snapshots pb
+                    WHERE pb.sales_id = s.sales_id
+                      AND pb.service_type = 'internal'
+                      AND pb.status IN ('new', 'termin')
+                      AND pb.cross_sell_count > 0
+                      AND ${periodKey('pb.paid_date')} = ${periodKey('s.paid_date')}
+                )`;
+
 export class SnapshotRepository implements ISnapshotRepository {
     constructor(private readonly dbPool: Pool) {}
 
@@ -41,6 +57,7 @@ export class SnapshotRepository implements ISnapshotRepository {
         const query = `
             SELECT
                 s.*,
+                ${PERIOD_BOOSTER_SQL} AS period_booster,
                 se.name AS sales_name,
                 se.photo_profile AS sales_photo,
                 ie.name AS implementator_name,
@@ -194,6 +211,7 @@ export class SnapshotRepository implements ISnapshotRepository {
         const query = `
             SELECT 
                 s.*,
+                ${PERIOD_BOOSTER_SQL} AS period_booster,
                 e.name AS implementator_name,
                 e.photo_profile AS implementator_photo_profile
             FROM snapshots s

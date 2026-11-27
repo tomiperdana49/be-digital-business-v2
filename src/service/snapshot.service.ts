@@ -14,6 +14,19 @@ const toDateString = (value: any): string | null => {
 };
 
 /**
+ * SE: kalau dalam satu periode pembayaran sales punya minimal satu cross-sell valid, rate booster 15%
+ * berlaku untuk seluruh New Service (new/termin) sales itu di periode tersebut. Berlaku mulai periode Nov 2026.
+ */
+const PERIOD_BOOSTER_FROM = '2026-10-26';
+
+const hasPeriodBooster = (row: any): boolean =>
+    Number(row.period_booster) > 0 && (toDateString(row.paid_date) ?? '') >= PERIOD_BOOSTER_FROM;
+
+/** cross_sell_count untuk hitung persen komisi: cross-sell baris itu sendiri, atau booster periode. */
+const effectiveCrossSell = (row: any): number =>
+    Number(row.cross_sell_count) > 0 ? Number(row.cross_sell_count) : (hasPeriodBooster(row) ? 1 : 0);
+
+/**
  * Manager yang boleh klaim komisi "Cust Lama" (recurring customer pribadinya) ke Manager Commission,
  * beserta endDate periode terakhir yang masih berlaku. Manager lain (mis. Desy) tidak klaim sama sekali.
  */
@@ -170,7 +183,7 @@ export class SnapshotService implements ISnapshotService {
                 commissionPercentage = res.commissionPercentage;
                 mrc = this.resellMrc(row, newResellServiceIds, filters.startDate || '');
             } else {
-                const res = Calculate.internalSalesCommission(status, this.commissionBase(row, subscription), row.cross_sell_count, monthPeriod);
+                const res = Calculate.internalSalesCommission(status, this.commissionBase(row, subscription), effectiveCrossSell(row), monthPeriod);
                 commissionAmount = res.commissionAmount;
                 commissionPercentage = res.commissionPercentage;
                 mrc = this.applyMrcOverride(row, ['recurring', 'termin', 'setup'].includes(status) ? 0 : Calculate.mrc(subscription, monthPeriod, status));
@@ -205,6 +218,7 @@ export class SnapshotService implements ISnapshotService {
                 subscription,
                 modal: row.service_type === 'resell' ? Number(row.modal) || 0 : null,
                 crossSellCount: row.service_type === 'internal' ? row.cross_sell_count : null,
+                periodBooster: row.service_type === 'internal' ? Number(row.cross_sell_count) <= 0 && hasPeriodBooster(row) : null,
                 baseCommission: row.base_commission !== null && row.base_commission !== undefined ? Number(row.base_commission) : null,
                 mrcOverride: row.mrc_override !== null && row.mrc_override !== undefined ? Number(row.mrc_override) : null,
                 implementatorPeriodDate: row.implementator_period_date ?? null,
@@ -699,7 +713,7 @@ export class SnapshotService implements ISnapshotService {
             const status = row.status;
 
             const { commissionAmount } = Calculate.internalSalesCommission(
-                status, this.commissionBase(row, subscription), row.cross_sell_count, monthPeriod
+                status, this.commissionBase(row, subscription), effectiveCrossSell(row), monthPeriod
             );
 
             if (status === 'recurring') {
@@ -751,7 +765,7 @@ export class SnapshotService implements ISnapshotService {
             const monthPeriod = Number(row.month_period) || 1;
 
             const { commissionAmount, commissionPercentage } = Calculate.internalSalesCommission(
-                row.status, this.commissionBase(row, subscription), row.cross_sell_count, monthPeriod
+                row.status, this.commissionBase(row, subscription), effectiveCrossSell(row), monthPeriod
             );
 
             return {
@@ -772,6 +786,7 @@ export class SnapshotService implements ISnapshotService {
                 serviceName: row.service_name,
                 serviceType: row.service_type,
                 crossSellCount: row.cross_sell_count,
+                periodBooster: Number(row.cross_sell_count) <= 0 && hasPeriodBooster(row),
                 implementator: {
                     name: row.implementator_name || '',
                     employeeId: row.implementator_id || '',

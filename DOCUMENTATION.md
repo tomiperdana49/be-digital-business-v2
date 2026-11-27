@@ -298,6 +298,8 @@ Semua rumus ada di [`src/helper/calculate.ts`](src/helper/calculate.ts) (class `
 
 `cross_sell_count` (booster 15%, sesuai SE) = layanan `digital_business` lain (selain domain) di CustId yang sama, ditambah mulai pembayaran `2026-11-26` (periode Desember 2026, `INTERNET_BOOSTER_FROM` di `internal-invoice.job.ts`) layanan **internet bisnis** (`ServiceCategory = 'access_business'`) yang belum `NA` di CustId yang sama. Internet rumahan (`access_home`) tidak dihitung. Perusahaan yang sama dengan CustId berbeda tidak terdeteksi, jadi koreksinya manual (`cross_sell_count = 1`, `is_adjust = 1`).
 
+**Booster per periode** (catatan SE, mulai `paid_date >= 2026-10-26`, periode November 2026, `PERIOD_BOOSTER_FROM` di `snapshot.service.ts`): kalau seorang sales punya minimal satu new/termin internal dengan `cross_sell_count > 0` di periode pembayaran yang sama (26-25), seluruh new/termin sales itu di periode tersebut ikut 15%. Dihitung saat baca (`period_booster` di query snapshot), `cross_sell_count` di DB tidak diubah, jadi daftar deal cross-sell (`getCrossSellDeals`) tetap hanya cross-sell asli. API mengirim `periodBooster: true` untuk baris yang 15%-nya dari booster periode.
+
 **Aturan khusus pembayaran dimuka >12 bulan** (hanya untuk `status = 'new'` dan `months > 12`):
 ```
 first12MonthsAmount = dpp × (12 / months)
