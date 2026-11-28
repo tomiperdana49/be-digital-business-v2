@@ -275,11 +275,18 @@ Contoh baris di `/etc/cron.d/digital-business-commission` untuk job harian (sesu
 - **Prorata modal & month_period berbasis kalender riil**, bukan asumsi 30 hari:
   - Jika periode invoice (`period_start_date`–`period_end_date`) tepat kelipatan bulan penuh (mis. 19 Apr–18 Mei), `month_period` = jumlah bulan bulat, `modal` = modal penuh.
   - Jika tidak tepat kelipatan bulan (periode "ganjil"), hitung **prorata per hari** menggunakan jumlah hari aktual di tiap bulan kalender yang dilewati (`getDaysInMonth`), lalu jumlahkan pecahan per-chunk bulan. Ini memastikan modal & month_period akurat walau invoice dimulai di tengah bulan.
+- **Sumber modal**: NIS `CustomerServiceCost.modal_cost_per_user` per layanan customer (form Edit Service NIS: **Harga Modal per Pengguna**). "Harga Modal Lainnya" (`modal_cost_other`) tidak dipakai. Modal harus diisi untuk **satu periode tagihan**, satuan yang sama dengan harga @ per user: tagihan "/ 1 Tahun" → modal setahun. Modal bulanan pada tagihan tahunan membuat margin janggal (ratusan/ribuan persen); modal kosong dibaca 0 → komisi 2,5%. Koreksi di NIS sebelum periode berhenti di-sync, atau manual di snapshot (`modal`, `is_adjust = 1`).
 
 ### 7.4 `manager-mapping.job.ts` — `bun run sync:manager-mapping [year] [month]`
 - Menyalin `employees.manager_id` karyawan aktif ke `employee_manager_snapshots` untuk satu periode (default: periode berjalan, cut-off 26–25). Upsert, jadi aman dijalankan berulang.
 - Semua data tim (Manager Commission, Team, reward manager, `team` & `supervisorEmail` di `/commission/:email`) membaca snapshot ini, **bukan** `employees.manager_id` langsung. Jalankan setelah `sync:employee` kalau ada perubahan atasan.
 - Mapping periode yang sudah lewat tidak diubah (kecuali dijalankan dengan `year month` periode itu), supaya komisi bulan lalu tetap memakai susunan tim saat itu.
+
+### 7.5 Invoice yang tidak ikut sync (tidak dapat komisi)
+Berlaku di query sync internal maupun resell (`getInternalByDateRange` / `getResellByDateRange` di `nis.repository.ts`):
+- **Cloud server / layanan grup `SV` (Nusa Cloud Compute, dll.) dengan DPP < Rp 500.000 per baris invoice** tidak dapat komisi (`NOT (ServiceGroup = 'SV' AND dpp < 500000)`). Batasnya **per baris invoice, bukan akumulasi** per invoice atau per customer. Contoh: customer dengan 20 VM @ Rp 75.000 (total Rp 1,5jt/bulan) tidak masuk sama sekali. **Alasan**: cloud server kecil umumnya dipesan sendiri oleh customer lewat **WHMCS** dan dibayar otomatis, hampir tanpa peran sales. Aturan dan alasannya dikonfirmasi manager pada 2026-11-28 (pembuat awal aturan sudah tidak di tim). Kalau ada customer cloud yang "tidak muncul", cek dulu DPP per barisnya.
+- Layanan yang nama tipenya mengandung "lisensi"/"license".
+- Resell grup `DO` (domain).
 
 ---
 
