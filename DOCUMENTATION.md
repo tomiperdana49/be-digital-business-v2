@@ -137,6 +137,7 @@ gemini.md        # Panduan konteks proyek untuk AI assistant
 | `FEEDBACK_SHEET_URL` | Link spreadsheet feedback, ditampilkan sebagai tombol di notifikasi Google Chat (opsional) | `''` |
 | `CLIENT_API_KEYS` | API key untuk client eksternal (`/commission/:email`), pisahkan dengan koma kalau lebih dari satu (untuk rotasi). Kosong = endpoint client membalas `503` | `''` |
 | `TV_DISPLAY_KEY` | Key layar TV tanpa login (FE: `/tv?key=...`); kosong = `/tv/mrc` selalu `404` | `''` |
+| `PERIOD_CLOSER_EMAILS` | Email yang boleh close / buka periode komisi (§9.1), pisahkan dengan koma | `tomi@nusa.id` |
 
 Semua nilai ini diekspor terstruktur lewat [`src/config/app.ts`](src/config/app.ts) sebagai object `config`. **Jangan** memanggil `process.env` di file lain.
 
@@ -408,6 +409,16 @@ Method yang tersedia:
 - `getStartAndEndDateForMonth(year, month)` — periode untuk bulan tertentu (1=Januari).
 - `getPeriodByDate(date)` — deteksi tahun+bulan+range dari sebuah tanggal.
 - `getPeriodFromQuery(monthQuery?, yearQuery?)` — dipakai semua controller: kalau query kosong → default hari ini; kalau salah satu ada → pakai default lawannya dari `today`.
+
+### 9.1 Kapan periode tertutup (otomatis & manual)
+
+- **Otomatis**: job sync (`getPeriodsToSync`) mengulang periode berjalan setiap jam, ditambah periode sebelumnya pada tanggal 26 sampai akhir bulan. Mulai tanggal 1 periode sebelumnya tidak di-sync lagi, sehingga datanya tetap, kecuali job dijalankan manual dengan tanggal periode itu atau diedit lewat admin/SQL.
+- **Manual (close periode)**: tabel `period_closures` (lihat `table.sql`), diatur dari halaman FE `/period` (menu admin "Close Periode"). Periode yang di-close:
+  - dilewati job `internal-invoice` dan `resell-invoice`, baik otomatis maupun manual dengan argumen tanggal (seluruh rentang di-skip kalau beririsan dengan periode yang di-close);
+  - tidak bisa diedit lewat `PATCH /invoice/snapshot/:ai` dan referral (`PUT`/`DELETE /invoice/snapshot/:ai/referral`) kalau `paid_date` atau `implementator_period_date`-nya jatuh di periode itu.
+- Close baru bisa dilakukan setelah tanggal 25 periode itu lewat. Close dan buka hanya untuk email di `PERIOD_CLOSER_EMAILS`; admin lain hanya bisa melihat daftar.
+- Yang tetap jalan: *carry over* implementator yang terlambat diisi (dialihkan ke periode berjalan, bukan ke periode yang di-close). Komisi dihitung saat dibaca dari data snapshot periode itu, jadi angkanya tetap selama datanya tidak berubah.
+- Endpoint: `GET /period/closure` (admin; berisi `canClose`), `POST /period/closure` `{year, month}`, `DELETE /period/closure/:year/:month`.
 
 ---
 

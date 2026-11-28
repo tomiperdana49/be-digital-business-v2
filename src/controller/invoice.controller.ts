@@ -2,7 +2,8 @@ import { Context } from "hono";
 import { ISnapshotService } from "../interface/snapshot.interface";
 import { ApiResponse } from "../helper/response";
 import { PeriodHelper } from "../helper/period";
-import { BadRequestException } from "../helper/exception";
+import { BadRequestException, NotFoundException } from "../helper/exception";
+import { PeriodClosureService } from "../service/period-closure.service";
 
 const VALID_SNAPSHOT_STATUSES = ['new', 'upgrade', 'termin', 'recurring', 'prorate', 'add', 'setup'];
 const VALID_SERVICE_TYPES = ['internal', 'resell'];
@@ -10,8 +11,20 @@ const VALID_SERVICE_TYPES = ['internal', 'resell'];
 export class InvoiceController {
     constructor(
         private readonly snapshotService: ISnapshotService,
+        private readonly periodClosureService: PeriodClosureService,
         private readonly periodHelper: PeriodHelper = new PeriodHelper(),
     ) {}
+
+    /** Data invoice di periode yang sudah di-close (period_closures) tidak boleh diubah dari admin. */
+    private async assertSnapshotPeriodOpen(ai: number, ...newDates: unknown[]) {
+        const snapshot = await this.snapshotService.getSnapshotByAi(ai);
+        if (!snapshot) throw new NotFoundException('Snapshot not found');
+        await this.periodClosureService.assertOpen(
+            snapshot.paid_date,
+            snapshot.implementator_period_date,
+            ...newDates.map(value => (typeof value === 'string' ? value : null))
+        );
+    }
 
     async accountManagers(c: Context) {
         const data = await this.snapshotService.getAccountManagers();
@@ -102,6 +115,7 @@ export class InvoiceController {
             throw new BadRequestException('Invalid implementator_period_date. Must be YYYY-MM-DD or null');
         }
 
+        await this.assertSnapshotPeriodOpen(ai, body.paid_date, body.implementator_period_date);
         const result = await this.snapshotService.updateSnapshot(ai, body);
 
         if (!result) {
@@ -131,6 +145,7 @@ export class InvoiceController {
         const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim().slice(0, 255) : null;
         const user = c.get('user');
 
+        await this.assertSnapshotPeriodOpen(ai);
         await this.snapshotService.setReferral(ai, referrerId, note, String(user?.sub ?? ''));
         return ApiResponse.success(c, null, "Referral saved successfully");
     }
@@ -141,6 +156,7 @@ export class InvoiceController {
             throw new BadRequestException('Valid ai is required');
         }
 
+        await this.assertSnapshotPeriodOpen(ai);
         await this.snapshotService.deleteReferral(ai);
         return ApiResponse.success(c, null, "Referral deleted successfully");
     }

@@ -4,6 +4,8 @@ import { SnapshotService } from '../service/snapshot.service';
 import { SnapshotRepository } from '../repository/snapshot.repository';
 import { dashboardPool, nisPool } from '../config/database';
 import { PeriodHelper } from '../helper/period';
+import { PeriodClosureRepository } from '../repository/period-closure.repository';
+import { PeriodClosureService } from '../service/period-closure.service';
 import { differenceInDays, getDaysInMonth, endOfMonth, addDays, startOfDay, format } from 'date-fns';
 
 const nisRepository = new NisRepository(nisPool);
@@ -11,6 +13,7 @@ const nisService = new NisService(nisRepository);
 const snapshotRepository = new SnapshotRepository(dashboardPool);
 const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const periodHelper = new PeriodHelper();
+const periodClosureService = new PeriodClosureService(new PeriodClosureRepository(dashboardPool));
 
 // Aturan prorate tanpa tanda dari NIS hanya untuk pembayaran mulai periode Nov 2026, supaya periode lama tidak berubah.
 const UNFLAGGED_PRORATE_FROM = '2026-10-26';
@@ -204,6 +207,12 @@ async function main() {
         : periodHelper.getPeriodsToSync();
 
     for (const { startDate, endDate } of periods) {
+        // Periode yang sudah di-close (period_closures) tidak di-sync ulang, supaya datanya tidak berubah
+        const closed = await periodClosureService.closedPeriodsInRange(startDate, endDate);
+        if (closed.length > 0) {
+            console.log(`[SYNC] Skip ${startDate} to ${endDate}: periode ${closed.join(', ')} sudah di-close`);
+            continue;
+        }
         await syncResellInvoices(startDate, endDate);
     }
 

@@ -7,6 +7,9 @@ import { AdditionalController } from '../controller/additional.controller';
 import { TargetController } from '../controller/target.controller';
 import { FeedbackController } from '../controller/feedback.controller';
 import { TvController } from '../controller/tv.controller';
+import { PeriodClosureController } from '../controller/period-closure.controller';
+import { PeriodClosureRepository } from '../repository/period-closure.repository';
+import { PeriodClosureService } from '../service/period-closure.service';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { adminMiddleware } from '../middleware/admin.middleware';
 import { apiKeyMiddleware } from '../middleware/api-key.middleware';
@@ -39,16 +42,18 @@ const snapshotService = new SnapshotService(snapshotRepository, nisService);
 const employeeService = new EmployeeService(employeeRepository);
 const authService = new AuthService(employeeService);
 const rewardService = new RewardService(targetRepository, snapshotService, employeeService);
+const periodClosureService = new PeriodClosureService(new PeriodClosureRepository(dashboardPool));
 
 // Initialize Controllers
 const authController = new AuthController(authService);
 const employeeController = new EmployeeController(employeeService);
-const invoiceController = new InvoiceController(snapshotService);
+const invoiceController = new InvoiceController(snapshotService, periodClosureService);
 const commissionController = new CommissionController(snapshotService, employeeService, rewardService);
 const additionalController = new AdditionalController();
 const targetController = new TargetController(targetRepository, employeeService);
 const feedbackController = new FeedbackController(feedbackRepository, employeeService);
 const tvController = new TvController(snapshotService, employeeService, rewardService);
+const periodClosureController = new PeriodClosureController(periodClosureService);
 
 // Akses data karyawan :id: admin, diri sendiri, atau atasannya
 const employeeAccess = hierarchyMiddleware(employeeService);
@@ -102,6 +107,11 @@ api.get('/team/:id/manager/churn', authMiddleware, employeeAccess, (c) => commis
 api.get('/target', authMiddleware, adminMiddleware, (c) => targetController.list(c));
 api.put('/target', authMiddleware, adminMiddleware, (c) => targetController.upsert(c));
 api.delete('/target/:id', authMiddleware, adminMiddleware, (c) => targetController.delete(c));
+// Close periode komisi: daftar untuk admin; close / buka hanya email di PERIOD_CLOSER_EMAILS (dicek di controller)
+api.get('/period/closure', authMiddleware, adminMiddleware, (c) => periodClosureController.list(c));
+api.post('/period/closure', authMiddleware, adminMiddleware, (c) => periodClosureController.close(c));
+api.delete('/period/closure/:year/:month', authMiddleware, adminMiddleware, (c) => periodClosureController.reopen(c));
+
 // Feedback Routes (disimpan di Google Sheet; list dilihat langsung di sheet)
 api.post('/feedback', authMiddleware, (c) => feedbackController.create(c));
 

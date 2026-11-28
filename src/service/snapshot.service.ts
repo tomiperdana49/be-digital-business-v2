@@ -156,6 +156,10 @@ export class SnapshotService implements ISnapshotService {
         await this.snapshotRepository.deleteReferral(ai);
     }
 
+    async getSnapshotByAi(ai: number): Promise<any | null> {
+        return await this.snapshotRepository.getSnapshotByAi(ai);
+    }
+
     async getSnapshotList(filters: SnapshotListFilters): Promise<any> {
         const [rows, total, newResellServiceIdRows] = await Promise.all([
             this.snapshotRepository.getSnapshots(filters),

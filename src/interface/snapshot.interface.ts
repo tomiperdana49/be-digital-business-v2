@@ -194,5 +194,6 @@ export interface ISnapshotService {
     getReferralSummary(referrerId: string, startDate: string, endDate: string): Promise<SalesReferral>;
     setReferral(ai: number, referrerId: string, note: string | null, createdBy: string): Promise<void>;
     deleteReferral(ai: number): Promise<void>;
+    getSnapshotByAi(ai: number): Promise<any | null>;
     getReferrerCandidates(): Promise<any[]>;
 }

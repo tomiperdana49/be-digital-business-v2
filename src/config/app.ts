@@ -24,6 +24,10 @@ export const config = {
     clientId: process.env.NUSAWORK_CLIENT_ID || '',
     clientSecret: process.env.NUSAWORK_CLIENT_SECRET || '',
   },
+  period: {
+    // Email yang boleh close / buka periode komisi (pisahkan dengan koma)
+    closerEmails: (process.env.PERIOD_CLOSER_EMAILS || 'tomi@nusa.id').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
+  },
   auth: {
     apiUrl: process.env.AUTH_API_URL || '',
     jwtSecret: process.env.JWT_SECRET || 'secret',

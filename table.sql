@@ -123,3 +123,14 @@ CREATE TABLE referrals (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_referrals_referrer (referrer_id)
 );
+
+-- Close periode komisi manual: periode (year, month = periode 26-25 yang berakhir di bulan itu) yang ada di sini
+-- tidak di-sync ulang oleh job dan datanya tidak bisa diedit dari halaman admin, sampai dibuka lagi.
+-- Close / buka hanya oleh email di env PERIOD_CLOSER_EMAILS (default tomi@nusa.id).
+CREATE TABLE period_closures (
+    year INT NOT NULL,
+    month INT NOT NULL,
+    closed_by VARCHAR(255) NOT NULL,
+    closed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (year, month)
+);
